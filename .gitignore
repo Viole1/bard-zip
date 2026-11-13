@@ -1,0 +1,91 @@
+### C++ ###
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+### CMake ###
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+### CMake Patch ###
+CMakeUserPresets.json
+
+# External projects
+*-prefix/
+
+### Build output ###
+# Visual Studio "Open Folder" / CMake presets (see CMakePresets.json)
+out/
+build/
+cmake-build-*/
+.cache/
+
+### IDE and editor files ###
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.vcxproj.user
+*.ipch
+*.vsidx
+*.sqlite
+*.opendb
+*.VC.db
+*.VC.db-shm
+*.VC.db-wal
+
+### Debug / profiling artifacts ###
+*.pdb
+*.ilk
+*.exp
+*.log
+*.tmp
+*.dmp
+
+### OS files ###
+Thumbs.db
+desktop.ini
+.DS_Store
+
+### Project-specific ###
+# Generated poems and decoded files from manual experiments
+*.poem
