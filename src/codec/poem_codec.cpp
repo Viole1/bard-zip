@@ -4,6 +4,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "codec/byte_codec.hpp"
 #include "codec/dictionary.hpp"
@@ -21,25 +22,71 @@ Stanza encode_stanza(std::uint8_t first, std::uint8_t second) {
     return stanza;
 }
 
+namespace {
+
+// Every valid first line and second line (with its final period) maps to
+// exactly one byte; 256 entries each. The line breaks are already removed by
+// the line reader, so keys contain none.
+struct DecodingTables {
+    std::unordered_map<std::string, std::uint8_t> first_lines;
+    std::unordered_map<std::string, std::uint8_t> second_lines;
+};
+
+const DecodingTables& decoding_tables() {
+    static const DecodingTables tables = [] {
+        DecodingTables result;
+
+        result.first_lines.reserve(256);
+        result.second_lines.reserve(256);
+
+        for (std::size_t value = 0; value < 256; ++value) {
+            const auto byte = static_cast<std::uint8_t>(value);
+
+            const auto first = result.first_lines.emplace(
+                encode_byte(byte, adjectives, nouns), byte);
+            const auto second = result.second_lines.emplace(
+                encode_byte(byte, verbs, objects) + ".", byte);
+
+            // A duplicate line would make decoding ambiguous.
+            if (!first.second || !second.second) {
+                throw std::logic_error("Dictionaries produce duplicate poem lines");
+            }
+        }
+
+        return result;
+    }();
+
+    return tables;
+}
+
+}
+
 std::array<std::uint8_t, 2> decode_stanza(const Stanza& stanza) {
     if (stanza[2] != stanza_refrain) {
         throw std::invalid_argument("Invalid stanza format.");
     }
 
-    std::string_view second_line = stanza[1];
+    const auto& tables = decoding_tables();
 
-    if (!second_line.ends_with('.')) {
-        throw std::invalid_argument(
-            "Invalid second line: expected a final period"
-        );
+    const auto first = tables.first_lines.find(stanza[0]);
+
+    if (first == tables.first_lines.end()) {
+        throw std::invalid_argument("Unknown first line in the stanza");
     }
 
-    second_line.remove_suffix(1);
+    const auto second = tables.second_lines.find(stanza[1]);
 
-    return {
-        decode_byte(stanza[0], adjectives, nouns),
-        decode_byte(second_line, verbs, objects)
-    };
+    if (second == tables.second_lines.end()) {
+        if (!std::string_view(stanza[1]).ends_with('.')) {
+            throw std::invalid_argument(
+                "Invalid second line: expected a final period"
+            );
+        }
+
+        throw std::invalid_argument("Unknown second line in the stanza");
+    }
+
+    return { first->second, second->second };
 }
 
 PoemEncoder::PoemEncoder(TextSink sink)
@@ -81,14 +128,40 @@ void PoemEncoder::finish() {
     flush();
 }
 
-void PoemEncoder::add_stanza(std::uint8_t first, std::uint8_t second) {
-    const auto stanza = encode_stanza(first, second);
+namespace {
 
-    buffer_ += stanza[0];
-    buffer_ += '\n';
-    buffer_ += stanza[1];
-    buffer_ += '\n';
-    buffer_ += stanza[2];
+// Every first line and every second line has only 256 possible values, so they
+// are built once (with their line break) instead of once per stanza.
+struct EncodingTables {
+    std::array<std::string, 256> first_lines;
+    std::array<std::string, 256> second_lines;
+};
+
+const EncodingTables& encoding_tables() {
+    static const EncodingTables tables = [] {
+        EncodingTables result;
+
+        for (std::size_t value = 0; value < 256; ++value) {
+            const auto byte = static_cast<std::uint8_t>(value);
+
+            result.first_lines[value] = encode_byte(byte, adjectives, nouns) + "\n";
+            result.second_lines[value] = encode_byte(byte, verbs, objects) + ".\n";
+        }
+
+        return result;
+    }();
+
+    return tables;
+}
+
+}
+
+void PoemEncoder::add_stanza(std::uint8_t first, std::uint8_t second) {
+    const auto& tables = encoding_tables();
+
+    buffer_ += tables.first_lines[first];
+    buffer_ += tables.second_lines[second];
+    buffer_ += stanza_refrain;
     buffer_ += "\n\n";
 
     ++stanza_count_;
@@ -199,15 +272,14 @@ public:
         return lines_.next_line(line) && line == poem_marker;
     }
 
-    // Returns false at the end of the poem.
+    // Returns false at the end of the poem. The three lines are read into
+    // members so their memory is reused for every stanza.
     bool next(std::array<std::uint8_t, 2>& bytes) {
-        Stanza stanza;
-
-        if (!lines_.next_line(stanza[0])) {
+        if (!lines_.next_line(stanza_[0])) {
             return false;
         }
 
-        if (!lines_.next_line(stanza[1]) || !lines_.next_line(stanza[2])) {
+        if (!lines_.next_line(stanza_[1]) || !lines_.next_line(stanza_[2])) {
             throw std::invalid_argument(
                 "Invalid poem format: incomplete stanza"
             );
@@ -216,7 +288,7 @@ public:
         ++number_;
 
         try {
-            bytes = decode_stanza(stanza);
+            bytes = decode_stanza(stanza_);
         }
         catch (const std::exception& error) {
             throw std::invalid_argument(
@@ -237,6 +309,7 @@ public:
 
 private:
     LineReader lines_;
+    Stanza stanza_;
     std::size_t number_ = 0;
 };
 
