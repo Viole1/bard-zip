@@ -8,6 +8,7 @@ add_executable(bardzip_tests
     integration_tests.cpp
     streaming_tests.cpp
     compatibility_tests.cpp
+    fuzz_tests.cpp
     temporary_file_tests.cpp
 
     ${PROJECT_SOURCE_DIR}/src/cli/arguments.cpp

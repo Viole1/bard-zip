@@ -167,7 +167,7 @@ Exit code: `0` on success, `1` on any error (message goes to stderr as `Error: .
 - **Never overwrites.** If the output file already exists, the command fails.
 - **Atomic writes.** The result appears only when completely written ([RAII](raii.md)).
 - **Size limits.** Memory use does not depend on the file size (see [Streaming](streaming.md)), but a poem is ~54× larger than its data, so `encode` refuses inputs above **16 MiB** by default (a poem of about 0.8 GB). The error shows the estimated poem size; raise the limit with `--max-input <bytes>` (`--max-input 0` = no limit). Decoded output is limited to `--max-output` (default 256 MiB) and is checked *before* decompression, which protects against "decompression bombs" (a tiny file that expands to gigabytes). A single poem line may not exceed 4096 bytes.
-- **Strict decoding.** Any wrong word, missing period, wrong refrain, incomplete stanza, wrong padding, bad checksum or mismatched size is an error. Windows line endings (CRLF) and extra blank lines are tolerated.
+- **Strict decoding.** Any wrong word, missing period, wrong refrain, incomplete stanza, wrong padding, bad checksum or mismatched size is an error. Windows line endings (CRLF), extra blank lines and a UTF-8 byte order mark at the start of the file (added by some editors when a poem is re-saved) are tolerated.
 
 > Good to know: a poem is ~50× larger than its data (a 100 MB file becomes a ~5.4 GB poem), so make sure there is enough disk space. Memory usage stays around 10–15 MiB regardless.
 

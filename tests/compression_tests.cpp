@@ -136,6 +136,22 @@ TEST(decompress_enforces_declared_size) {
     );
 }
 
+TEST(decompress_refuses_oversized_zstd_window) {
+    // Hand-made empty frames: magic, descriptor (no content size), window
+    // descriptor, and one last empty raw block. The window is 2^(10 + exponent).
+    const auto empty_frame = [](std::uint8_t exponent) {
+        return std::vector<std::uint8_t>{
+            0x28, 0xB5, 0x2F, 0xFD, 0x00,
+            static_cast<std::uint8_t>(exponent << 3),
+            0x01, 0x00, 0x00
+        };
+    };
+
+    // 2^23 (8 MiB) is fine, 2^27 (128 MiB) must be refused before any allocation.
+    CHECK(decompress(empty_frame(13), CompressionMethod::Zstd, 0).empty());
+    CHECK_THROWS_WITH(decompress(empty_frame(17), CompressionMethod::Zstd, 0), "Corrupted zstd payload");
+}
+
 TEST(decompress_none_checks_size) {
     const std::vector<std::uint8_t> data{ 1, 2, 3 };
 

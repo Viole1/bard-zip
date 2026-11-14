@@ -35,7 +35,7 @@ flowchart TD
     NB -->|no| F["result = NOT crc"]
 ```
 
-Intuition: the data is treated as one gigantic binary number which is divided by a special 33‑bit number (the polynomial); the CRC is the remainder of this division. The loop above performs that division one bit at a time using only shifts and XOR.
+Intuition: the data is treated as one gigantic binary number which is divided by a special 33‑bit number (the polynomial); the CRC is the remainder of this division. The loop above performs that division one bit at a time using only shifts and XOR. It is the clearest way to see what CRC32 is, and it is kept as the reference in the tests. The program itself uses an equivalent faster form, **slice-by-8**: eight precomputed tables of 256 entries let it fold 8 input bytes with eight lookups instead of 64 bit steps. The results are identical (the tests compare both for every length from 0 to 300 at nine start offsets); the speed went from about 123 to 2,400 MiB/s.
 
 Verified against known reference values in [crc32_tests.cpp](../../tests/crc32_tests.cpp):
 

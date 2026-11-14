@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(BardZip
-    VERSION 0.1.0
+    VERSION 0.1.1
     LANGUAGES CXX
 )
 
@@ -61,6 +61,7 @@ add_library(bardzip_core STATIC
     src/core/file_operations.cpp
     src/io/file_reader.cpp
     src/io/file_writer.cpp
+    src/io/prefetch_stream.cpp
     src/io/temporary_file.cpp
 )
 
@@ -88,4 +89,24 @@ target_link_libraries(bardzip PRIVATE bardzip_core)
 if(BARDZIP_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+option(BARDZIP_BUILD_TOOLS "Build developer tools (stage profiler)" OFF)
+
+if(BARDZIP_BUILD_TOOLS)
+    add_executable(bardzip_stage_profile tools/stage_profile.cpp)
+    target_link_libraries(bardzip_stage_profile PRIVATE bardzip_core)
+endif()
+
+# libFuzzer targets (MSVC AddressSanitizer + libFuzzer). Configure a separate
+# build directory with the instrumentation on every target, see docs/*/fuzzing.md:
+#   -DCMAKE_C_FLAGS=/fsanitize=fuzzer -DCMAKE_CXX_FLAGS=/fsanitize=fuzzer
+#   -DBARDZIP_STATIC_RUNTIME=OFF -DBARDZIP_BUILD_FUZZERS=ON
+option(BARDZIP_BUILD_FUZZERS "Build libFuzzer targets" OFF)
+
+if(BARDZIP_BUILD_FUZZERS)
+    foreach(name poem header zstd extract)
+        add_executable(fuzz_${name} tools/fuzz/fuzz_${name}.cpp)
+        target_link_libraries(fuzz_${name} PRIVATE bardzip_core)
+    endforeach()
 endif()

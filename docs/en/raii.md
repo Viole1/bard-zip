@@ -24,6 +24,7 @@ flowchart LR
 | [`TemporaryFile`](../../include/io/temporary_file.hpp) | Windows file handle + a temporary file on disk | destructor closes the handle and deletes the temp file unless `commit()` succeeded |
 | [`ScratchFile`](../../include/io/temporary_file.hpp) | a work file (e.g. the compressed payload during [streaming](streaming.md)) | destructor always deletes it |
 | `std::unique_ptr<ZSTD_DCtx, ...>` / `std::unique_ptr<ZSTD_CCtx, ...>` inside `ZstdDecompressor` / `ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) | zstd contexts (C library objects) | custom deleters call `ZSTD_freeDCtx` / `ZSTD_freeCCtx` |
+| [`PrefetchStreambuf`](../../include/io/prefetch_stream.hpp) | a background reader thread | destructor stops and joins the thread, also when decoding failed halfway |
 | `std::ifstream` / `std::ofstream` | open files | close themselves |
 | `std::vector`, `std::string` everywhere | memory | free themselves |
 

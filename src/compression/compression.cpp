@@ -11,6 +11,7 @@ namespace bardzip {
 namespace {
 
 constexpr int zstd_level = 3;
+constexpr int max_zstd_window_log = 24;
 
 struct CompressionContextDeleter {
     void operator()(ZSTD_CCtx* context) const noexcept {
@@ -110,6 +111,15 @@ ZstdDecompressor::ZstdDecompressor(std::uint64_t expected_size, ByteSink sink)
 
     impl_->sink = std::move(sink);
     impl_->expected_size = expected_size;
+
+    // Our encoder never uses a window above 2^21 bytes. A hostile frame may
+    // ask for up to 2^27 (128 MiB) of window memory; refuse anything above 16 MiB.
+    const auto limit = ZSTD_DCtx_setParameter(
+        impl_->context.get(), ZSTD_d_windowLogMax, max_zstd_window_log);
+
+    if (ZSTD_isError(limit)) {
+        throw std::runtime_error("Failed to configure the zstd decompression context");
+    }
 }
 
 ZstdDecompressor::~ZstdDecompressor() = default;

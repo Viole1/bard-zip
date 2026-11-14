@@ -72,6 +72,20 @@ sequenceDiagram
 
 If the data is **stored** (no compression), no copy is made: pass 2 simply reads the input again and re‑checks size and CRC32. If the file changed in between, encoding fails with "Input file changed while it was being encoded" and nothing is published.
 
+## Read-ahead thread (decode, verify, inspect)
+
+Reading the poem file from disk and decoding it used to run one after the other. `PrefetchStreambuf` ([prefetch_stream.cpp](../../src/io/prefetch_stream.cpp)) reads the file in a **background thread** into a small queue (blocks of 256 KiB, at most 4 queued) while the main thread decodes the previous blocks. Memory stays bounded (peak about 7 MiB instead of 5), and `verify`/`decode` became about 1.5× faster ([benchmarks](benchmarks.md)).
+
+```mermaid
+flowchart LR
+    F["poem file"] --> T["reader thread<br/>reads 256 KiB blocks"]
+    T --> Q["queue<br/>(max 4 blocks)"]
+    Q --> M["main thread<br/>decode_poem_stream"]
+    M -. "queue full → reader waits" .-> T
+```
+
+Rules the implementation follows: errors in the reader thread are stored and re-thrown in the main thread after the data read before them; when decoding stops early (error, or `inspect` after the header) the destructor stops the thread and waits for it, so nothing keeps running or holds the file open; `encode` does not use it.
+
 ## Decoding: the reverse, with checks before trust
 
 ```mermaid

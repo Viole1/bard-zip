@@ -13,6 +13,7 @@
 #include "container/crc32.hpp"
 #include "core/file_operations.hpp"
 #include "io/file_writer.hpp"
+#include "io/prefetch_stream.hpp"
 #include "test_support.hpp"
 
 using namespace bardzip;
@@ -347,6 +348,117 @@ TEST(encode_respects_input_limit) {
     std::filesystem::remove(poem);
     encode_file(original, poem, CompressionMode::Auto, 0);  // 0 = no limit
     CHECK(std::filesystem::exists(poem));
+}
+
+namespace {
+
+// A source that serves 8 bytes and then reports a read error (badbit), like a
+// failing disk does.
+class FailingBuffer : public std::streambuf {
+public:
+    std::istream* owner = nullptr;
+
+protected:
+    int_type underflow() override {
+        if (served_) {
+            owner->setstate(std::ios::badbit);
+            return traits_type::eof();
+        }
+
+        served_ = true;
+        setg(data_, data_, data_ + sizeof(data_));
+        return traits_type::to_int_type(data_[0]);
+    }
+
+private:
+    char data_[8] = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' };
+    bool served_ = false;
+};
+
+}
+
+TEST(prefetch_stream_delivers_every_byte_for_any_block_and_queue_size) {
+    for (const std::size_t size : { 0u, 1u, 100u, 300007u }) {
+        const auto data = mixed_data(size);
+        const std::string text(data.begin(), data.end());
+
+        for (const std::size_t block : { 1u, 7u, 4096u, 1000000u }) {
+            if (block == 1 && size > 1000) {
+                continue;  // one thread hand-off per byte is too slow for big inputs
+            }
+
+            for (const std::size_t queue : { 1u, 2u, 4u }) {
+                std::istringstream source(text);
+                PrefetchStreambuf prefetch(source, block, queue);
+                std::istream in(&prefetch);
+
+                std::string result;
+                std::vector<char> chunk(997);  // does not divide any block size
+
+                while (in.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) || in.gcount() > 0) {
+                    result.append(chunk.data(), static_cast<std::size_t>(in.gcount()));
+                }
+
+                CHECK(result == text);
+            }
+        }
+    }
+}
+
+TEST(prefetch_stream_can_be_abandoned_early) {
+    // The reader thread is blocked on a full queue when the stream is destroyed;
+    // destruction must stop and join it instead of hanging.
+    const auto data = mixed_data(5000000);
+    std::istringstream source(std::string(data.begin(), data.end()));
+
+    {
+        PrefetchStreambuf prefetch(source, 64 * 1024, 2);
+        std::istream in(&prefetch);
+
+        char buffer[10];
+        in.read(buffer, sizeof(buffer));
+        CHECK(in.gcount() == 10);
+    }
+
+    CHECK(source.tellg() < 1000000);  // it did not read the whole source
+}
+
+TEST(prefetch_stream_reports_read_errors_after_the_data_before_them) {
+    FailingBuffer failing;
+    std::istream source(&failing);
+    failing.owner = &source;
+
+    // The block size (3) does not divide the 8 bytes, so the last block is partial.
+    PrefetchStreambuf prefetch(source, 3, 2);
+    std::istream in(&prefetch);
+
+    // get() per character: it also works when the stream fails in the middle.
+    std::string received;
+    for (char ch; in.get(ch);) {
+        received.push_back(ch);
+    }
+
+    CHECK(in.bad());
+    CHECK(received == "abcdefgh");
+}
+
+TEST(truncated_file_never_hangs_the_prefetch_thread) {
+    const auto dir = test::fresh_dir("prefetch_damage");
+    const auto original = dir / "in.bin";
+    const auto poem = dir / "in.poem";
+    write_bytes(original, mixed_data(300000));
+    encode_file(original, poem, CompressionMode::None);
+
+    // Cut the poem in the middle: decoding fails while the reader thread is ahead.
+    auto text = read_text(poem);
+    text.resize(text.size() / 2);
+    const auto cut = dir / "cut.poem";
+    write_text_file(cut, text);
+
+    CHECK_THROWS(verify_file(cut));
+    CHECK_THROWS(decode_file(cut, dir / "cut.out"));
+    CHECK(!std::filesystem::exists(dir / "cut.out"));
+    CHECK(test::count_entries(dir) == 3);  // in.bin, in.poem, cut.poem only
 }
 
 TEST(inspect_streams_without_decompressing) {

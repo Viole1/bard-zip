@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -6,6 +7,57 @@
 #include "test_support.hpp"
 
 using namespace bardzip;
+
+namespace {
+
+// The original bit-by-bit algorithm, kept as the reference for the table version.
+std::uint32_t reference_crc32(std::span<const std::uint8_t> bytes) {
+    std::uint32_t crc = 0xFFFFFFFFu;
+
+    for (const auto byte : bytes) {
+        crc ^= byte;
+
+        for (int i = 0; i < 8; ++i) {
+            crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+    }
+
+    return ~crc;
+}
+
+}
+
+TEST(crc32_matches_bitwise_reference_for_all_lengths_and_alignments) {
+    std::vector<std::uint8_t> data(600);
+    std::uint32_t state = 7;
+
+    for (auto& byte : data) {
+        state = state * 1664525u + 1013904223u;
+        byte = static_cast<std::uint8_t>(state >> 24);
+    }
+
+    // Lengths around the 8-byte block size, every start offset, all-ones and zero data.
+    for (std::size_t offset = 0; offset < 9; ++offset) {
+        for (std::size_t length = 0; length <= 300; ++length) {
+            const std::span<const std::uint8_t> view{ data.data() + offset, length };
+            CHECK(crc32(view) == reference_crc32(view));
+        }
+    }
+
+    const std::vector<std::uint8_t> ones(1000, 0xFF);
+    const std::vector<std::uint8_t> zeros(1000, 0x00);
+    CHECK(crc32(ones) == reference_crc32(ones));
+    CHECK(crc32(zeros) == reference_crc32(zeros));
+
+    // Incremental updates with awkward chunk sizes give the same result.
+    for (const std::size_t chunk : { 1u, 3u, 7u, 8u, 9u, 64u }) {
+        Crc32 crc;
+        for (std::size_t i = 0; i < data.size(); i += chunk) {
+            crc.update(std::span<const std::uint8_t>{ data }.subspan(i, (std::min)(chunk, data.size() - i)));
+        }
+        CHECK(crc.value() == reference_crc32(data));
+    }
+}
 
 TEST(crc32_empty_vector) {
     const std::array<std::uint8_t, 0> empty{};

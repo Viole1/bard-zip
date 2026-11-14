@@ -24,6 +24,7 @@ flowchart LR
 | [`TemporaryFile`](../../include/io/temporary_file.hpp) | Дескриптор файла Windows + временный файл на диске | деструктор закрывает дескриптор и удаляет временный файл, если `commit()` не прошёл |
 | [`ScratchFile`](../../include/io/temporary_file.hpp) | рабочий файл (например, сжатый payload при [потоковой обработке](streaming.md)) | деструктор удаляет его всегда |
 | `std::unique_ptr<ZSTD_DCtx, ...>` / `std::unique_ptr<ZSTD_CCtx, ...>` внутри `ZstdDecompressor` / `ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) | контексты zstd (объекты C‑библиотеки) | собственные deleter'ы вызывают `ZSTD_freeDCtx` / `ZSTD_freeCCtx` |
+| [`PrefetchStreambuf`](../../include/io/prefetch_stream.hpp) | фоновый поток чтения | деструктор останавливает и дожидается поток, в том числе если декодирование сорвалось на полпути |
 | `std::ifstream` / `std::ofstream` | открытые файлы | закрываются сами |
 | `std::vector`, `std::string` повсюду | память | освобождают себя сами |
 

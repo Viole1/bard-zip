@@ -15,6 +15,7 @@ BardZip превращает байты в поэзию.
 | Compression (zstd, `auto` mode) | [docs/en/compression.md](en/compression.md) | [docs/ru/compression.md](ru/compression.md) |
 | Streaming (constant memory, 64 KiB blocks) | [docs/en/streaming.md](en/streaming.md) | [docs/ru/streaming.md](ru/streaming.md) |
 | Benchmarks (baseline to compare future optimizations) | [docs/en/benchmarks.md](en/benchmarks.md) | [docs/ru/benchmarks.md](ru/benchmarks.md) |
+| Fuzzing (robustness against broken and hostile files) | [docs/en/fuzzing.md](en/fuzzing.md) | [docs/ru/fuzzing.md](ru/fuzzing.md) |
 
 Suggested reading order: overview → main flow → the rest in any order.
 

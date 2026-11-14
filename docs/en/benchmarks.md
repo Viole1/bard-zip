@@ -125,15 +125,100 @@ Change (build D): `StanzaReader` keeps one `Stanza` as a member and reads the th
 
 verify is **−29 %** and decode **−34 %**; the ranges do not overlap and memory is unchanged. Decision: **keep**. This confirms the suspicion that string allocation, not the dictionary search, was the main decoder cost. Decoding is now about 8 MiB/s, still behind encode (~12.8 MiB/s on 32 MiB).
 
+### Step 4 — table-driven CRC32 (slice-by-8)
+
+Change (build Q): the bit-by-bit loop of `Crc32::update` was replaced with eight 256-entry tables folding 8 bytes per step. The algorithm and results are identical (a test compares it with the original bit-by-bit code for all lengths 0–300 at 9 start offsets, and the golden poems still decode). Build P is the code just before the change. 32 MiB random input, 5 runs after warm-up, same method:
+
+| Command | Build | Median s | Min–max s | MiB/s |
+|---|---|---:|---|---:|
+| verify | P | 3.92 | 3.72–4.11 | 8.17 |
+| verify | Q | **3.54** | 3.12–3.67 | 9.05 |
+| decode | P | 3.98 | 3.68–4.47 | 8.04 |
+| decode | Q | **3.47** | 3.24–4.27 | 9.23 |
+| encode | P | 2.57 | 2.41–3.15 | 12.44 |
+| encode | Q | 3.42 | 2.92–4.50 | 9.35 |
+| encode, repeated with 9 runs | P | 3.41 | 2.75–4.14 | 9.38 |
+| encode, repeated with 9 runs | Q | 3.11 | 2.47–3.54 | 10.29 |
+
+CRC32 itself went from **123 to ≈2,400 MiB/s** (stage profile below). verify and decode are **~10–13 % faster**. `encode` is dominated by writing the multi-hundred-MiB poem, its ranges overlap and the two runs disagree about which build is faster, so the honest conclusion is "no measurable difference, disk noise". Decision: **keep** (no risk: same results, tested against the reference).
+
+### Stage profile (E1)
+
+[tools/stage_profile.cpp](../../tools/stage_profile.cpp) (`-DBARDZIP_BUILD_TOOLS=ON`, target `bardzip_stage_profile`) measures the stages in one process on 4 MiB of random data (215 MiB poem, 2,097,170 stanzas), best of 3 runs, Release, **after step 4**. It is a stage timer, not a sampling profiler: it answers "how much does each stage cost on its own".
+
+| Stage | Seconds | Data MiB/s | Poem MiB/s |
+|---|---:|---:|---:|
+| crc32 over data | 0.001 | 2,776 | – |
+| `PoemEncoder` (bytes → text, null sink) | 0.036 | 112 | 6,002 |
+| `decode_stanza` only (scaled to full size) | 0.153 | 26 | 1,405 |
+| `decode_poem_stream` from memory (minus stream copy) | 0.225 | 18 | 956 |
+| read poem file in 64 KiB blocks | 0.131 | 31 | 1,642 |
+| `decode_poem_stream` from file | 0.362 | 11 | 594 |
+| `verify_file` (whole command) | 0.405 | 9.9 | 530 |
+| `encode_file` (whole command, no compression) | 0.264 | 15.2 | 814 |
+
+Before step 4 the same run showed CRC at 0.033 s (123 MiB/s), `verify_file` 0.458 s and `encode_file` 0.297 s.
+
+What it says about `verify` / `decode` (0.36–0.40 s for 4 MiB):
+
+| Share | Stage | Comment |
+|---|---|---|
+| ~42 % | `decode_stanza` | two hash lookups of ≈30-byte `std::string` keys per stanza, ≈73 ns per stanza |
+| ~36 % | reading the file | 1.6 GiB/s: memory-copy speed with a warm cache; it adds up with decoding because they run one after another |
+| ~20 % | line splitting (`LineReader`) and the rest | copies each line into a `std::string` |
+| ~0 % | CRC32 | no longer a factor |
+
+`encode` is limited by how fast the 215 MiB poem can be written (the formatting stage is only 0.036 s), which is why its numbers vary most between runs.
+
+Candidates in order of expected value: (1) faster `decode_stanza`, e.g. avoid hashing by dispatching on the first word; (2) overlap reading and decoding in threads (E7 in [plan](../../plan.md)); (3) read lines as `string_view` (E3).
+
+### Steps 5–6 — faster `decode_stanza` and a read-ahead thread
+
+Both measured with the same method on 32 MiB random input, 7 runs after warm-up, builds R (before), S (after step 5), F (after step 6, final):
+
+| Build | Change |
+|---|---|
+| R | state at the end of the stage profile above (hash map `unordered_map<std::string, uint8_t>` per line kind, single-threaded reading) |
+| S | step 5: a small fixed table with a cheap hash replaces the `unordered_map`. The hash looks at the length and three 8-byte windows of the line instead of all ≈30 bytes; a hit is always confirmed by comparing the whole line, so damaged lines can never decode to a wrong byte |
+| F | step 6: `PrefetchStreambuf` reads the poem file in a background thread (256 KiB blocks, at most 4 queued), so reading overlaps with decoding |
+
+| Command | Build | Median s | Min–max s | MiB/s | Peak memory MiB |
+|---|---|---:|---|---:|---:|
+| verify | R | 3.68 | 3.40–4.03 | 8.69 | 5.0 |
+| verify | S | 2.90 | 2.80–3.35 | 11.04 | 5.0 |
+| verify | F | **1.91** | 1.63–2.26 | 16.72 | 7.0 |
+| decode | R | 3.63 | 3.53–3.86 | 8.82 | 5.0 |
+| decode | S | 2.84 | 2.65–3.10 | 11.28 | 5.0 |
+| decode | F | **1.84** | 1.69–2.14 | 17.36 | 7.0 |
+| encode | R | 2.60 | 1.89–7.57 | 12.31 | 5.0 |
+| encode | S | 2.39 | 1.86–3.28 | 13.40 | 5.0 |
+| encode | F | 3.03 | 1.84–3.52 | 10.57 | 5.0 |
+
+- **Step 5**: verify −21 %, decode −22 % (an earlier run of the same comparison gave −24 % / −20 %).
+- **Step 6**: a further −34 % / −35 %. The price is about 2 MiB of extra memory (7 MiB peak) and one background thread.
+- **Together (R → F): verify −48 %, decode −49 %**, i.e. about 1.9× faster.
+- `encode` was not touched by these steps; its ranges overlap completely (it is limited by writing the poem), so differences there are noise.
+
+### Experiments that were dropped
+
+Not every idea pays off. Both of these were implemented, tested and **removed** because they did not meet the "keep only if at least 5 % faster" rule on the real commands:
+
+| Idea | Micro-benchmark | Real `verify` / `decode` (A/B) | Decision |
+|---|---|---|---|
+| Store the text of each table line inline in a fixed record (no pointer to follow) | `decode_stanza` 0.127 → 0.077 s | 3.06 vs 3.08 s: no change | dropped |
+| Read the three lines of a stanza as `string_view`s into the buffer (no copies) | none | 3.33 vs 3.08 s: slower | dropped |
+
+Lesson: a micro-benchmark on cache-resident data can promise gains that disappear in the real pipeline. Always decide with an A/B on the real commands ([scripts/compare.ps1](../../scripts/compare.ps1)).
+
 ## Ideas to test against this baseline
 
 | Idea | Expected effect |
 |---|---|
 | ~~Avoid per‑stanza `std::string` allocations in `PoemEncoder`~~ **done (step 1)** | encode ↑ |
-| ~~Replace linear dictionary search with a hash map~~ **done (step 2, +11 %)**; next: look up `string_view` keys / perfect hash | decode / verify ↑ |
-| ~~`LineReader` / `decode_poem_stream` create a `std::string` per line~~ **partly done (step 3, −29 % / −34 %)**: strings are reused; reading lines as `string_view` could remove the remaining copies | decode / verify ↑ |
-| Table‑driven (slice‑by‑8) CRC32 instead of bit‑by‑bit | all commands ↑ (CRC runs 2–3 times per byte) |
-| Pipeline in threads: read + CRC / compress / poem formatting / write | encode ↑ up to the slowest stage |
+| ~~Replace linear dictionary search with a hash map~~ **done (step 2, +11 %)**, then a cheaper hand-made table **(step 5, −21 %)** | decode / verify ↑ |
+| ~~`LineReader` / `decode_poem_stream` create a `std::string` per line~~ **partly done (step 3, −29 % / −34 %)**; `string_view` lines were tried and **dropped** (no gain) | decode / verify ↑ |
+| ~~Table‑driven (slice‑by‑8) CRC32 instead of bit‑by‑bit~~ **done (step 4, CRC ×20, verify/decode −10…13 %)** | all commands ↑ |
+| Pipeline in threads: ~~read ahead~~ **done for decode/verify (step 6, −34 %)**; still open: read + CRC / compress / poem formatting / write for encode | encode ↑ up to the slowest stage |
 | Parallel zstd (`ZSTD_c_nbWorkers`) | encode of compressible data ↑ |
 | Avoid the scratch payload file for decode when the payload is small | decode ↓ disk I/O |
 | New codecs / encryption | measure the cost per MiB against these rows |

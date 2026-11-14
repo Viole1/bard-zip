@@ -16,12 +16,30 @@
 #include "container/header.hpp"
 #include "io/byte_sink.hpp"
 #include "io/file_reader.hpp"
+#include "io/prefetch_stream.hpp"
 #include "io/temporary_file.hpp"
 
 namespace bardzip {
 
 namespace {
 
+// A poem file read ahead by a background thread, so disk reads overlap with
+// decoding. Member order matters: the thread (in `buffer_`) must stop before
+// the file it reads is closed.
+class PoemInput {
+public:
+    explicit PoemInput(const std::filesystem::path& path)
+        : file_(open_input_file(path)), buffer_(file_), stream_(&buffer_)
+    {
+    }
+
+    std::istream& stream() { return stream_; }
+
+private:
+    std::ifstream file_;
+    PrefetchStreambuf buffer_;
+    std::istream stream_;
+};
 constexpr const char* input_changed_message =
     "Input file changed while it was being encoded";
 
@@ -334,7 +352,8 @@ void decode_file(
 ) {
     require_new_output(output_path);
 
-    auto poem = open_input_file(input_path);
+    PoemInput input(input_path);
+    auto& poem = input.stream();
     TemporaryFile output(output_path);
 
     extract_poem_stream(
@@ -348,7 +367,8 @@ void decode_file(
 }
 
 void inspect_file(const std::filesystem::path& input_path) {
-    auto poem = open_input_file(input_path);
+    PoemInput input(input_path);
+    auto& poem = input.stream();
 
     const auto header = decode_poem_stream(
         poem,
@@ -384,7 +404,8 @@ void verify_file(
     const std::filesystem::path& input_path,
     std::uint64_t max_output
 ) {
-    auto poem = open_input_file(input_path);
+    PoemInput input(input_path);
+    auto& poem = input.stream();
 
     extract_poem_stream(
         poem,

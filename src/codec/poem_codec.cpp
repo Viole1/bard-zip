@@ -1,10 +1,11 @@
 #include "codec/poem_codec.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
-#include <unordered_map>
+#include <string_view>
 
 #include "codec/byte_codec.hpp"
 #include "codec/dictionary.hpp"
@@ -24,31 +25,103 @@ Stanza encode_stanza(std::uint8_t first, std::uint8_t second) {
 
 namespace {
 
-// Every valid first line and second line (with its final period) maps to
-// exactly one byte; 256 entries each. The line breaks are already removed by
-// the line reader, so keys contain none.
+// A fixed table of the 256 valid lines of one kind (first lines or second lines
+// with their final period) with a tiny open-addressing hash index. The line
+// breaks are already removed by the line reader, so lines contain none.
+//
+// The hash looks at the length and three 8-byte windows of the line instead of
+// every byte, which is much cheaper than std::hash on a 30-byte string. It only
+// picks a slot: a hit is always confirmed by comparing the whole line, so
+// similar or damaged lines can never decode to the wrong byte.
+class LineTable {
+public:
+    LineTable() { slots_.fill(empty_slot); }
+
+    // Returns false if the line is already present (ambiguous dictionaries).
+    bool insert(std::string line, std::uint8_t value) {
+        if (find(line) >= 0) {
+            return false;
+        }
+
+        auto index = slot_of(line);
+
+        while (slots_[index] != empty_slot) {
+            index = (index + 1) & slot_mask;
+        }
+
+        slots_[index] = value;
+        lines_[value] = std::move(line);
+        return true;
+    }
+
+    // Returns the byte value, or -1 if the line is unknown.
+    int find(std::string_view line) const noexcept {
+        auto index = slot_of(line);
+
+        while (slots_[index] != empty_slot) {
+            if (lines_[slots_[index]] == line) {
+                return slots_[index];
+            }
+
+            index = (index + 1) & slot_mask;
+        }
+
+        return -1;
+    }
+
+private:
+    static constexpr std::size_t slot_count = 1024;  // 256 lines: load factor 25 %
+    static constexpr std::size_t slot_mask = slot_count - 1;
+    static constexpr std::uint16_t empty_slot = 0xFFFF;
+
+    static std::uint64_t load(const char* position, std::size_t size) noexcept {
+        std::uint64_t value = 0;
+        std::memcpy(&value, position, size < 8 ? size : 8);
+        return value;
+    }
+
+    static std::size_t slot_of(std::string_view line) noexcept {
+        const auto size = line.size();
+        const auto* data = line.data();
+
+        const auto head = load(data, size);
+        const auto tail = size > 8 ? load(data + size - 8, 8) : head;
+        const auto middle = size > 16 ? load(data + size / 2 - 4, 8) : head;
+
+        auto hash = head * 0x9E3779B97F4A7C15ull
+            ^ tail * 0xC2B2AE3D27D4EB4Full
+            ^ middle * 0x165667B19E3779F9ull
+            ^ size * 0xD6E8FEB86659FD93ull;
+
+        hash ^= hash >> 32;
+        hash *= 0xD6E8FEB86659FD93ull;
+
+        return static_cast<std::size_t>(hash >> 54);  // top 10 bits
+    }
+
+    std::array<std::string, 256> lines_;
+    std::array<std::uint16_t, slot_count> slots_;
+};
+
 struct DecodingTables {
-    std::unordered_map<std::string, std::uint8_t> first_lines;
-    std::unordered_map<std::string, std::uint8_t> second_lines;
+    LineTable first_lines;
+    LineTable second_lines;
 };
 
 const DecodingTables& decoding_tables() {
     static const DecodingTables tables = [] {
         DecodingTables result;
 
-        result.first_lines.reserve(256);
-        result.second_lines.reserve(256);
-
         for (std::size_t value = 0; value < 256; ++value) {
             const auto byte = static_cast<std::uint8_t>(value);
 
-            const auto first = result.first_lines.emplace(
+            const bool first = result.first_lines.insert(
                 encode_byte(byte, adjectives, nouns), byte);
-            const auto second = result.second_lines.emplace(
+            const bool second = result.second_lines.insert(
                 encode_byte(byte, verbs, objects) + ".", byte);
 
             // A duplicate line would make decoding ambiguous.
-            if (!first.second || !second.second) {
+            if (!first || !second) {
                 throw std::logic_error("Dictionaries produce duplicate poem lines");
             }
         }
@@ -70,13 +143,13 @@ std::array<std::uint8_t, 2> decode_stanza(const Stanza& stanza) {
 
     const auto first = tables.first_lines.find(stanza[0]);
 
-    if (first == tables.first_lines.end()) {
+    if (first < 0) {
         throw std::invalid_argument("Unknown first line in the stanza");
     }
 
     const auto second = tables.second_lines.find(stanza[1]);
 
-    if (second == tables.second_lines.end()) {
+    if (second < 0) {
         if (!std::string_view(stanza[1]).ends_with('.')) {
             throw std::invalid_argument(
                 "Invalid second line: expected a final period"
@@ -86,7 +159,7 @@ std::array<std::uint8_t, 2> decode_stanza(const Stanza& stanza) {
         throw std::invalid_argument("Unknown second line in the stanza");
     }
 
-    return { first->second, second->second };
+    return { static_cast<std::uint8_t>(first), static_cast<std::uint8_t>(second) };
 }
 
 PoemEncoder::PoemEncoder(TextSink sink)
@@ -269,7 +342,24 @@ public:
 
     bool read_marker() {
         std::string line;
-        return lines_.next_line(line) && line == poem_marker;
+
+        if (!lines_.next_line(line)) {
+            return false;
+        }
+
+        // Some editors (older Notepad) put a UTF-8 byte order mark at the start
+        // when a poem is re-saved; it is not part of the poem.
+        constexpr std::string_view utf8_bom = "\xEF\xBB\xBF";
+
+        if (line.starts_with(utf8_bom)) {
+            line.erase(0, utf8_bom.size());
+
+            if (line.empty() && !lines_.next_line(line)) {
+                return false;
+            }
+        }
+
+        return line == poem_marker;
     }
 
     // Returns false at the end of the poem. The three lines are read into
@@ -326,7 +416,10 @@ Header decode_poem_stream(
     StanzaReader reader(poem);
 
     if (!reader.read_marker()) {
-        throw std::invalid_argument("Invalid poem header");
+        throw std::invalid_argument(
+            "Invalid poem header: the file must be the UTF-8 text produced by "
+            "bardzip encode, unchanged"
+        );
     }
 
     std::array<std::uint8_t, 2> pair{};
