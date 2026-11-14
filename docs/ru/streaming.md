@@ -1,6 +1,6 @@
 # Потоковая обработка — постоянная память для файла любого размера
 
-[Оглавление](../../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · 🇬🇧 [English version](../en/streaming.md)
+[Оглавление](../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · 🇬🇧 [English version](../en/streaming.md)
 
 ## Простыми словами
 

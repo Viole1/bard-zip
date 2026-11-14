@@ -1,6 +1,6 @@
 # Streaming — constant memory for any file size
 
-[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · 🇷🇺 [Русская версия](../ru/streaming.md)
+[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · 🇷🇺 [Русская версия](../ru/streaming.md)
 
 ## In plain words
 

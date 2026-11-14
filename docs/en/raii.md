@@ -1,6 +1,6 @@
 # RAII — automatic cleanup
 
-[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/raii.md)
+[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/raii.md)
 
 ## In plain words
 

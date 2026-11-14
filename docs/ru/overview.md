@@ -1,6 +1,6 @@
 # BardZip — обзор проекта
 
-[Оглавление](../../README.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/overview.md)
+[Оглавление](../README.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/overview.md)
 
 ## 1. Что это? (знание программирования не требуется)
 
@@ -143,6 +143,7 @@ bardzip encode <input> -o <output> [--compression none|zstd|auto] [--max-input <
 bardzip decode <input> -o <output> [--max-output <bytes>]
 bardzip verify <input> [--max-output <bytes>]
 bardzip inspect <input>
+bardzip --help | --version
 ```
 
 | Команда | Что делает |

@@ -1,6 +1,6 @@
 # Основной поток работы
 
-[Оглавление](../../README.md) · [Обзор](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/main-flow.md)
+[Оглавление](../README.md) · [Обзор](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/main-flow.md)
 
 Все четыре команды находятся в [file_operations.cpp](../../src/core/file_operations.cpp). Каждая — короткий конвейер шагов; каждый шаг — отдельная, тестируемая функция.
 

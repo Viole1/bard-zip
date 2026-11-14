@@ -19,6 +19,13 @@ void print_report(const bardzip::EncodeReport& report) {
         << "Container bytes:    " << report.container_size << '\n'
         << "Poem bytes:         " << report.poem_size << '\n'
         << "Stanzas:            " << report.stanza_count << '\n';
+
+    // The default decode limit is lower than an explicitly raised encode limit.
+    if (report.original_size > bardzip::default_max_output) {
+        std::cerr
+            << "Note: decoding this poem needs --max-output "
+            << report.original_size << " (or more).\n";
+    }
 }
 
 }
@@ -56,6 +63,14 @@ int main(int argc, char* argv[]) {
 
         case bardzip::Command::Verify:
             bardzip::verify_file(arguments.input, arguments.max_output);
+            break;
+
+        case bardzip::Command::Help:
+            std::cout << bardzip::help_text();
+            break;
+
+        case bardzip::Command::Version:
+            std::cout << bardzip::version_text();
             break;
         }
 

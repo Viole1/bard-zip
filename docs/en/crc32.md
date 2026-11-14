@@ -1,6 +1,6 @@
 # CRC32 — a fingerprint for data
 
-[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/crc32.md)
+[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/crc32.md)
 
 ## In plain words
 

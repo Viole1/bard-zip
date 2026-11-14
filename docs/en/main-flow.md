@@ -1,6 +1,6 @@
 # Main flow
 
-[Docs index](../../README.md) · [Overview](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/main-flow.md)
+[Docs index](../README.md) · [Overview](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/main-flow.md)
 
 All four commands live in [file_operations.cpp](../../src/core/file_operations.cpp). Each one is a short pipeline of steps; every step is a separate, testable function.
 

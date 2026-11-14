@@ -1,6 +1,6 @@
 # RAII — автоматическая уборка
 
-[Оглавление](../../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/raii.md)
+[Оглавление](../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/raii.md)
 
 ## Простыми словами
 

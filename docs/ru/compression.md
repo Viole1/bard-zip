@@ -1,6 +1,6 @@
 # Сжатие
 
-[Оглавление](../../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/compression.md)
+[Оглавление](../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/compression.md)
 
 ## Простыми словами
 

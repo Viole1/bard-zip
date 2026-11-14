@@ -1,23 +1,66 @@
-# BardZip documentation / Документация BardZip
+# BardZip
 
-BardZip turns bytes into poetry.
+BardZip turns **any file into a Russian poem** and back, byte for byte. Every two bytes become one three-line stanza built from four dictionaries of 16 words, so a ZIP archive can travel as a (slightly absurd) text file.
 
-BardZip превращает байты в поэзию.
+```text
+BARDZIP-POEM 1 DICT 1
 
-| Topic | English | Русский |
-|---|---|---|
-| Project overview, architecture, formats, CLI | [docs/en/overview.md](docs/en/overview.md) | [docs/ru/overview.md](docs/ru/overview.md) |
-| Main flow (encode / decode / verify / inspect) | [docs/en/main-flow.md](docs/en/main-flow.md) | [docs/ru/main-flow.md](docs/ru/main-flow.md) |
-| RAII (automatic cleanup) | [docs/en/raii.md](docs/en/raii.md) | [docs/ru/raii.md](docs/ru/raii.md) |
-| CRC32 (checksums) | [docs/en/crc32.md](docs/en/crc32.md) | [docs/ru/crc32.md](docs/ru/crc32.md) |
-| Compression (zstd, `auto` mode) | [docs/en/compression.md](docs/en/compression.md) | [docs/ru/compression.md](docs/ru/compression.md) |
-| Streaming (constant memory, 64 KiB blocks) | [docs/en/streaming.md](docs/en/streaming.md) | [docs/ru/streaming.md](docs/ru/streaming.md) |
-| Benchmarks (baseline to compare future optimizations) | [docs/en/benchmarks.md](docs/en/benchmarks.md) | [docs/ru/benchmarks.md](docs/ru/benchmarks.md) |
+бледный протокол
+оплакивает квитанцию.
+четверг не наступил.
+```
 
-Suggested reading order: overview → main flow → the rest in any order.
+("pale protocol / mourns the receipt / Thursday has not come" — these three lines are the bytes `B` `Z` of the format signature.)
 
-Рекомендуемый порядок: обзор → основной поток → остальное в любом порядке.
+## Quick start
 
-> Diagrams are written in [Mermaid](https://mermaid.js.org/) and render on GitHub, in VS Code (Markdown Preview Mermaid Support) and in most modern Markdown viewers.
+```text
+bardzip encode photo.zip -o photo.poem
+bardzip inspect photo.poem
+bardzip verify  photo.poem
+bardzip decode  photo.poem -o photo_restored.zip
+```
 
-> Диаграммы написаны на Mermaid и отображаются на GitHub, в VS Code и в большинстве современных Markdown-просмотрщиков.
+Try the bundled example:
+
+```text
+bardzip decode examples\hello.poem -o hello.txt
+```
+
+| Command | What it does |
+|---|---|
+| `encode <input> -o <output>` | file → poem (`--compression none\|zstd\|auto`, default `auto`) |
+| `decode <input> -o <output>` | poem → file |
+| `verify <input>` | checks every checksum, writes nothing |
+| `inspect <input>` | prints the container header (does not check the payload) |
+| `--help`, `--version` | usage and version |
+
+## Things to know
+
+- **Windows x64 only** for now.
+- **A poem is about 54 times larger than the data.** A 16 MiB file becomes roughly 0.9 GB of text. `encode` therefore refuses inputs above **16 MiB** by default; raise it with `--max-input <bytes>` (`0` = no limit).
+- `decode` and `verify` refuse poems that would restore more than **256 MiB** (`--max-output <bytes>`); the declared size is checked before anything is decompressed.
+- **Existing files are never overwritten.** Results are written to a temporary file and appear only when complete.
+- **This is not encryption.** Anyone can read the poem back into data.
+- **CRC32 detects accidental damage only.** It does not authenticate the data: someone who edits a poem can recompute the checksums.
+- Memory use stays small (about 5-12 MiB) regardless of file size.
+
+## Build from source
+
+Requirements: CMake 3.25+, a C++20 compiler (MSVC), Windows. zstd is downloaded by CMake automatically.
+
+```text
+cmake -S . -B build -A x64
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Visual Studio users can also use the presets in `CMakePresets.json` (`x64-debug`, `x64-release`).
+
+## Documentation
+
+Detailed documentation with diagrams, in English and Russian: [docs/README.md](docs/README.md) — overview, main flow, RAII, CRC32, compression, streaming and benchmarks. Release history: [CHANGELOG.md](CHANGELOG.md). Ideas and roadmap: [plan.md](plan.md).
+
+## License
+
+[MIT](LICENSE). Third-party components: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

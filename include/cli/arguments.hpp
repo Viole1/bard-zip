@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <string>
 
 #include "compression/compression.hpp"
 #include "container/container.hpp"
@@ -13,7 +14,9 @@ enum class Command {
     Encode,
     Decode,
     Inspect,
-    Verify
+    Verify,
+    Help,
+    Version
 };
 
 struct Arguments {
@@ -28,5 +31,9 @@ struct Arguments {
 };
 
 Arguments parse_arguments(int argc, char* argv[]);
+
+// Text printed by `bardzip --help` and `bardzip --version`.
+std::string help_text();
+std::string version_text();
 
 }

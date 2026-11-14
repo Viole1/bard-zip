@@ -1,11 +1,24 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(BardZip
-    VERSION 1.0.0
+    VERSION 0.1.0
     LANGUAGES CXX
 )
 
 option(BARDZIP_BUILD_TESTS "Build BardZip tests" ON)
+option(BARDZIP_STATIC_RUNTIME
+    "Link the MSVC runtime statically so bardzip.exe runs without the VC++ redistributable" ON)
+
+if(MSVC AND BARDZIP_STATIC_RUNTIME)
+    # Must be set before any target (including zstd) is created.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+configure_file(
+    cmake/bardzip_version.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/bardzip_version.hpp
+    @ONLY
+)
 
 find_package(zstd CONFIG QUIET)
 
@@ -54,6 +67,7 @@ add_library(bardzip_core STATIC
 target_include_directories(bardzip_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 
 target_link_libraries(bardzip_core PRIVATE ${BARDZIP_ZSTD_TARGET})

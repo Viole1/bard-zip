@@ -1,6 +1,6 @@
 # BardZip — Overview
 
-[Docs index](../../README.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/overview.md)
+[Docs index](../README.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/overview.md)
 
 ## 1. What is it? (no programming knowledge needed)
 
@@ -143,6 +143,7 @@ bardzip encode <input> -o <output> [--compression none|zstd|auto] [--max-input <
 bardzip decode <input> -o <output> [--max-output <bytes>]
 bardzip verify <input> [--max-output <bytes>]
 bardzip inspect <input>
+bardzip --help | --version
 ```
 
 | Command | What it does |

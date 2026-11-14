@@ -1,6 +1,6 @@
 # Compression
 
-[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/compression.md)
+[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/compression.md)
 
 ## In plain words
 

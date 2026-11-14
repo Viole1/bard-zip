@@ -89,3 +89,8 @@ desktop.ini
 ### Project-specific ###
 # Generated poems and decoded files from manual experiments
 *.poem
+# ...except the committed golden fixtures and examples
+!tests/fixtures/*.poem
+!examples/*.poem
+# Release packages built by scripts/package.ps1
+dist/

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build (Release)
+        run: cmake --build build --config Release
+
+      - name: Test (Release)
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          ./build/Release/bardzip.exe --version
+          ./build/Release/bardzip.exe decode examples/hello.poem -o hello.txt
+          if (-not (Get-Content hello.txt -Raw).StartsWith("Hello, BardZip!")) { throw "unexpected example content" }

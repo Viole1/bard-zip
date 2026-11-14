@@ -64,7 +64,7 @@ TEST(max_output_parsing) {
 
 TEST(max_input_parsing) {
     CHECK(parse({ "encode", "in", "-o", "out" }).max_input == default_max_input);
-    CHECK(default_max_input == 32ULL * 1024 * 1024);
+    CHECK(default_max_input == 16ULL * 1024 * 1024);
     CHECK(parse({ "encode", "in", "-o", "out", "--max-input", "1000" }).max_input == 1000);
     CHECK(parse({ "encode", "in", "-o", "out", "--max-input", "0" }).max_input == 0);
 

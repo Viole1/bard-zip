@@ -19,6 +19,7 @@ void ensure_within_output_limit(
             + std::to_string(declared_size)
             + " bytes, allowed "
             + std::to_string(max_output)
+            + ". Use --max-output <bytes> to raise the limit"
         );
     }
 }

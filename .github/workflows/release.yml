@@ -1,0 +1,44 @@
+name: Release
+
+# Push a tag such as v0.1.0 to build, test and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build (Release)
+        run: cmake --build build --config Release
+
+      - name: Test (Release)
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check that the tag matches the version
+        shell: pwsh
+        run: |
+          $reported = (& ./build/Release/bardzip.exe --version).Trim()
+          if ($reported -ne "bardzip $($env:GITHUB_REF_NAME.TrimStart('v'))") {
+            throw "Tag $env:GITHUB_REF_NAME does not match '$reported'"
+          }
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1 -Exe build/Release/bardzip.exe
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: dist/release-notes.md
+          files: |
+            dist/*.zip
+            dist/*.zip.sha256

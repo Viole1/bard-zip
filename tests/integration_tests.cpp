@@ -125,6 +125,7 @@ TEST(decode_respects_output_limit) {
     encode_file(original, poem, CompressionMode::Zstd);
 
     CHECK_THROWS_WITH(decode_file(poem, restored, 100), "Output limit exceeded");
+    CHECK_THROWS_WITH(decode_file(poem, restored, 100), "--max-output");
     CHECK(!std::filesystem::exists(restored));
     CHECK_THROWS_WITH(verify_file(poem, 100), "Output limit exceeded");
 }
