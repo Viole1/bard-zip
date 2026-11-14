@@ -1,6 +1,6 @@
 # CRC32 — a fingerprint for data
 
-[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [Compression](compression.md) · 🇷🇺 [Русская версия](../ru/crc32.md)
+[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/crc32.md)
 
 ## In plain words
 
@@ -43,6 +43,10 @@ Verified against known reference values in [crc32_tests.cpp](../../tests/crc32_t
 |---|---|
 | empty | `0x00000000` |
 | ASCII `123456789` | `0xCBF43926` (the standard "check value") |
+
+## Incremental use (for [streaming](streaming.md))
+
+Big files are never checksummed in one piece. The `Crc32` class keeps the running value between blocks: call `update(block)` for each 64 KiB block, then read `value()`. The result is identical to one call over the whole data (checked by a test at many split points).
 
 ## Where BardZip uses it — three layers of protection
 

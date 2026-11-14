@@ -1,6 +1,6 @@
 # Основной поток работы
 
-[Оглавление](../README.md) · [Обзор](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · 🇬🇧 [English version](../en/main-flow.md)
+[Оглавление](../../README.md) · [Обзор](overview.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/main-flow.md)
 
 Все четыре команды находятся в [file_operations.cpp](../../src/core/file_operations.cpp). Каждая — короткий конвейер шагов; каждый шаг — отдельная, тестируемая функция.
 
@@ -30,94 +30,103 @@ flowchart TD
 
 ## 1. Encode: файл → поэма
 
+Кодирование делает **два прохода** по данным небольшими блоками по 64 КиБ (см. [Потоковая обработка](streaming.md)): заголовок стоит в начале контейнера, но его размеры и CRC известны только после обработки всего файла.
+
 ```mermaid
 flowchart LR
-    A["read_binary_file<br/>(≤ 64 МиБ)"] --> B["compress<br/>none / zstd / auto"]
-    B --> C["заголовок: размеры + CRC32<br/>+ CRC32 заголовка"]
-    C --> D["контейнер =<br/>заголовок + payload"]
-    D --> E["encode_poem<br/>2 байта → 1 строфа"]
-    E --> F["write_text_file<br/>(временный файл → переименование)"]
+    A["Проход 1: читаем вход блоками по 64 КиБ<br/>→ размер + CRC32"] --> B["сжатие (zstd) во временный<br/>файл payload<br/>none: хранить нечего"]
+    B --> C["auto: сжатое ≥ исходного?<br/>→ берём исходный файл"]
+    C --> D["заголовок: размеры + CRC32<br/>+ CRC32 заголовка"]
+    D --> E["Проход 2: заголовок, затем payload<br/>→ PoemEncoder (2 байта → 1 строфа)"]
+    E --> F["TemporaryFile<br/>→ переименование при успехе"]
 ```
 
 ```mermaid
 sequenceDiagram
     actor U as Пользователь
     participant FO as file_operations
-    participant CT as container
-    participant CP as compression
-    participant PC as poem_codec
-    participant IO as file_writer / TemporaryFile
+    participant CP as ZstdCompressor
+    participant SC as ScratchFile
+    participant PC as PoemEncoder
+    participant IO as TemporaryFile
     U->>FO: encode_file(in, out, mode)
-    FO->>FO: read_binary_file(in)
-    FO->>CT: build_container(original, mode)
-    CT->>CP: compress(original, mode)
-    CP-->>CT: метод + байты payload
-    CT->>CT: crc32(original), crc32(payload)
-    CT->>CT: serialize_header (добавляет CRC заголовка)
-    CT-->>FO: заголовок + payload
-    FO->>PC: encode_poem(container)
-    PC-->>FO: текст поэмы
-    FO->>IO: write_text_file(out, poem)
+    loop проход 1: каждый блок 64 КиБ
+        FO->>FO: обновить размер + CRC32 оригинала
+        FO->>CP: write(блок)
+        CP->>SC: сжатые байты (+ CRC32 payload)
+    end
+    FO->>FO: выбрать метод, собрать заголовок
+    FO->>IO: создать временный файл рядом с out
+    FO->>PC: байты заголовка
+    loop проход 2: каждый блок payload по 64 КиБ
+        FO->>PC: блок payload (временный файл или снова вход)
+        PC->>IO: текст поэмы порциями ~64 КиБ
+    end
+    FO->>FO: проверить размер + CRC32 прошедшего потока
+    FO->>IO: commit() (атомарное переименование)
     IO-->>U: файл появляется только когда готов целиком
     FO-->>U: отчёт (размеры, строфы)
 ```
 
 Детали:
 - Нечётная длина контейнера → для последней строфы добавляется один байт `0x00`.
+- Если данные хранятся как есть (`none` или `auto` решил, что сжатие не помогает), на проходе 2 заново читается входной файл, а не временная копия. При этом снова проверяются размер и CRC32, поэтому файл, изменённый во время кодирования, обнаруживается («Input file changed...»), и ничего не публикуется.
 - Отчёт в stderr: метод, размеры (исходный / payload / контейнер / поэма), число строф.
+- Уже существующий выходной файл отвергается сразу, до начала работы.
 
 ## 2. Decode: поэма → файл
 
 ```mermaid
 flowchart LR
-    A["read_text_file"] --> B["decode_poem<br/>текст → байты"]
-    B --> C["extract_container<br/>проверки + распаковка"]
-    C --> D["write_binary_file<br/>(временный файл → переименование)"]
+    A["открыть поэму<br/>(чтение блоками)"] --> B["decode_poem_stream<br/>строфы → байты payload"]
+    B --> C["временный файл payload<br/>+ проверка CRC32"]
+    C --> D["распаковка блоками по 64 КиБ<br/>+ проверка размера и CRC32 оригинала"]
+    D --> E["TemporaryFile<br/>→ переименование при успехе"]
 ```
 
-### Внутри `decode_poem`
+### Внутри `decode_poem_stream`
 
 ```mermaid
 flowchart TD
-    S["текст поэмы"] --> H{"первая непустая строка<br/>== BARDZIP-POEM 1 DICT 1 ?"}
+    S["текст поэмы, построчно<br/>(строка не длиннее 4096 байт)"] --> H{"первая непустая строка<br/>== BARDZIP-POEM 1 DICT 1 ?"}
     H -->|нет| X["ошибка"]
-    H -->|да| L["собрать непустые строки<br/>(CRLF допускается)"]
-    L --> M{"число строк % 3 == 0 ?"}
-    M -->|нет| X
-    M -->|да| ST["каждая строфа: припев верен?<br/>точка есть? слова известны?"]
+    H -->|да| ST["прочитать 18 строф = 36 байт заголовка<br/>(припев верен? точка есть? слова известны?)"]
     ST -->|сбой| X2["ошибка: 'Failed to decode stanza N'"]
-    ST --> HD["байтов ≥ 36?<br/>parse_header (magic, CRC, версия...)"]
-    HD --> LEN{"число строф соответствует<br/>36 + payload_size?"}
-    LEN -->|нет| X
-    LEN --> PAD{"длина нечётна → последний байт — нулевое заполнение?"}
+    ST --> HD["parse_header (magic, CRC, версия...)<br/>→ on_header: проверка лимита вывода"]
+    HD --> PAY["прочитать ровно payload_size байт<br/>строфами, блоки отдавать дальше"]
+    PAY --> LEN{"поэма кончилась раньше?"}
+    LEN -->|да| X
+    LEN --> PAD{"нечётный payload → последняя строфа дополнена нулём?"}
     PAD -->|нет| X
-    PAD -->|да| R["байты контейнера"]
+    PAD -->|да| EX{"есть ли строки после payload?"}
+    EX -->|да| X
+    EX -->|нет| R["заголовок + payload переданы"]
 ```
 
-### Внутри `extract_container`
+### Внутри этапа извлечения
 
 ```mermaid
 flowchart TD
-    A["байты контейнера"] --> B["parse_header<br/>(magic, CRC заголовка, поля)"]
-    B --> C{"original_size ≤ max_output?"}
-    C -->|нет| X["ошибка: лимит превышен<br/>(до любой распаковки)"]
-    C --> D{"payload_size == оставшимся байтам?"}
-    D -->|нет| X2["ошибка: размер не совпал"]
-    D --> E{"CRC32(payload) == payload_crc32?"}
+    A["заголовок (сразу после чтения)"] --> C{"original_size ≤ max_output?"}
+    C -->|нет| X["ошибка: лимит превышен<br/>(до чтения payload)"]
+    C --> P["блоки payload → временный файл + текущий CRC32"]
+    P --> E{"CRC32(payload) == payload_crc32?"}
     E -->|нет| X3["ошибка: Payload CRC mismatch"]
-    E --> F["decompress(payload, method, original_size)"]
-    F --> G{"CRC32(результат) == original_crc32?"}
-    G -->|нет| X4["ошибка: Original CRC mismatch"]
-    G --> OK["байты исходного файла"]
+    E --> F["распаковка (ZstdDecompressor)<br/>результат не больше original_size"]
+    F --> G{"размер и CRC32 результата<br/>== значениям заголовка?"}
+    G -->|нет| X4["ошибка: размер / Original CRC mismatch"]
+    G --> OK["commit: выходной файл опубликован"]
 ```
+
+Распакованные байты сразу пишутся во временный выходной файл, который публикуется только после прохождения всех проверок.
 
 ## 3. Verify
 
-То же, что decode, но результат выбрасывается: `read_text_file → decode_poem → extract_container`, затем печатается `Verification successful.` На диск ничего не пишется.
+То же, что decode, но распакованные байты только подсчитываются и сверяются по контрольной сумме, а не записываются (временный файл payload лежит во временной папке системы и затем удаляется). После этого печатается `Verification successful.`
 
 ## 4. Inspect
 
-`read_text_file → decode_poem → parse_header`, затем печать версии, сжатия, размеров, CRC32 и числа строф. Распаковки и проверки payload **нет** — вывод заканчивается строкой `Payload integrity: not checked`. Для проверки используйте `verify`.
+Читает поэму потоково, проверяя её структуру, и печатает версию, сжатие, размеры, CRC32 и число строф (вычисленное по заголовку). Распаковки и проверки payload **нет** — вывод заканчивается строкой `Payload integrity: not checked`. Для проверки используйте `verify`.
 
 ## 5. Обработка ошибок одной картинкой
 

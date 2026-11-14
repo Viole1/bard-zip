@@ -24,6 +24,7 @@ struct Arguments {
     CompressionMode compression = CompressionMode::Auto;
 
     std::uint64_t max_output = default_max_output;
+    std::uint64_t max_input = default_max_input;
 };
 
 Arguments parse_arguments(int argc, char* argv[]);

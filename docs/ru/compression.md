@@ -1,6 +1,6 @@
 # Сжатие
 
-[Оглавление](../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · 🇬🇧 [English version](../en/compression.md)
+[Оглавление](../../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/compression.md)
 
 ## Простыми словами
 
@@ -35,7 +35,7 @@ flowchart TD
 
 ## Сжатие
 
-`ZSTD_compress` вызывается с буфером размера `ZSTD_compressBound` (худший случай, гарантированный библиотекой); затем буфер обрезается до реального размера. Любая ошибка библиотеки становится исключением.
+`ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) принимает данные блоками (`write`) и по мере появления отдаёт сжатые байты в callback; `finish()` закрывает кадр. Точный размер источника сообщается заранее, поэтому записывается в заголовок кадра. Любая ошибка библиотеки становится исключением. См. [Потоковая обработка](streaming.md).
 
 ## Распаковка — безопасно
 

@@ -37,7 +37,8 @@ int main(int argc, char* argv[]) {
             print_report(bardzip::encode_file(
                 arguments.input,
                 *arguments.output,
-                arguments.compression
+                arguments.compression,
+                arguments.max_input
             ));
             break;
 

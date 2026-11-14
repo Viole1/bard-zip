@@ -62,6 +62,18 @@ TEST(max_output_parsing) {
     CHECK_THROWS(parse({ "encode", "in", "-o", "out", "--max-output", "10" }));
 }
 
+TEST(max_input_parsing) {
+    CHECK(parse({ "encode", "in", "-o", "out" }).max_input == default_max_input);
+    CHECK(default_max_input == 32ULL * 1024 * 1024);
+    CHECK(parse({ "encode", "in", "-o", "out", "--max-input", "1000" }).max_input == 1000);
+    CHECK(parse({ "encode", "in", "-o", "out", "--max-input", "0" }).max_input == 0);
+
+    CHECK_THROWS(parse({ "encode", "in", "-o", "out", "--max-input", "abc" }));
+    CHECK_THROWS(parse({ "encode", "in", "-o", "out", "--max-input" }));
+    CHECK_THROWS(parse({ "decode", "in", "-o", "out", "--max-input", "10" }));
+    CHECK_THROWS(parse({ "verify", "in", "--max-input", "10" }));
+}
+
 TEST(required_arguments) {
     CHECK_THROWS(parse({}));
     CHECK_THROWS(parse({ "encode", "in" }));

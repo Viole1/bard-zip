@@ -21,7 +21,8 @@ struct EncodeReport {
 EncodeReport encode_file(
     const std::filesystem::path& input_path,
     const std::filesystem::path& output_path,
-    CompressionMode mode = CompressionMode::Auto
+    CompressionMode mode = CompressionMode::Auto,
+    std::uint64_t max_input = default_max_input
 );
 
 void decode_file(

@@ -1,17 +1,18 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <string>
-#include <vector>
+#include <fstream>
+#include <span>
 
 namespace bardzip {
 
-// (64 MiB).
-inline constexpr std::uintmax_t max_input_file_size = 64ULL * 1024 * 1024;
+// Opens a file for binary reading; throws if it cannot be opened.
+std::ifstream open_input_file(const std::filesystem::path& path);
 
-std::string read_text_file(const std::filesystem::path& path);
-
-std::vector<std::uint8_t> read_binary_file(const std::filesystem::path& path);
+// Reads up to buffer.size() bytes; returns the number of bytes read
+// (less than buffer.size() only at the end of the stream, 0 at EOF).
+std::size_t read_block(std::istream& input, std::span<std::uint8_t> buffer);
 
 }

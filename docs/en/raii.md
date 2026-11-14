@@ -1,6 +1,6 @@
 # RAII — automatic cleanup
 
-[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [CRC32](crc32.md) · [Compression](compression.md) · 🇷🇺 [Русская версия](../ru/raii.md)
+[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [CRC32](crc32.md) · [Compression](compression.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/raii.md)
 
 ## In plain words
 
@@ -22,8 +22,9 @@ flowchart LR
 | Object | Resource | Released by |
 |---|---|---|
 | [`TemporaryFile`](../../include/io/temporary_file.hpp) | Windows file handle + a temporary file on disk | destructor closes the handle and deletes the temp file unless `commit()` succeeded |
-| `std::unique_ptr<ZSTD_DCtx, DecompressionContextDeleter>` in [compression.cpp](../../src/compression/compression.cpp) | zstd decompression context (C library object) | custom deleter calls `ZSTD_freeDCtx` |
-| `std::ifstream` in [file_reader.cpp](../../src/io/file_reader.cpp) | open input file | closes itself |
+| [`ScratchFile`](../../include/io/temporary_file.hpp) | a work file (e.g. the compressed payload during [streaming](streaming.md)) | destructor always deletes it |
+| `std::unique_ptr<ZSTD_DCtx, ...>` / `std::unique_ptr<ZSTD_CCtx, ...>` inside `ZstdDecompressor` / `ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) | zstd contexts (C library objects) | custom deleters call `ZSTD_freeDCtx` / `ZSTD_freeCCtx` |
+| `std::ifstream` / `std::ofstream` | open files | close themselves |
 | `std::vector`, `std::string` everywhere | memory | free themselves |
 
 The project has **no manual `new`/`delete`** and no "cleanup" blocks: every resource has an owner object.

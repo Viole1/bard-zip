@@ -1,6 +1,6 @@
 # RAII — автоматическая уборка
 
-[Оглавление](../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · 🇬🇧 [English version](../en/raii.md)
+[Оглавление](../../README.md) · [Обзор](overview.md) · [Основной поток](main-flow.md) · [CRC32](crc32.md) · [Сжатие](compression.md) · [Потоковая обработка](streaming.md) · 🇬🇧 [English version](../en/raii.md)
 
 ## Простыми словами
 
@@ -22,8 +22,9 @@ flowchart LR
 | Объект | Ресурс | Кто освобождает |
 |---|---|---|
 | [`TemporaryFile`](../../include/io/temporary_file.hpp) | Дескриптор файла Windows + временный файл на диске | деструктор закрывает дескриптор и удаляет временный файл, если `commit()` не прошёл |
-| `std::unique_ptr<ZSTD_DCtx, DecompressionContextDeleter>` в [compression.cpp](../../src/compression/compression.cpp) | контекст распаковки zstd (объект C‑библиотеки) | собственный deleter вызывает `ZSTD_freeDCtx` |
-| `std::ifstream` в [file_reader.cpp](../../src/io/file_reader.cpp) | открытый входной файл | закрывается сам |
+| [`ScratchFile`](../../include/io/temporary_file.hpp) | рабочий файл (например, сжатый payload при [потоковой обработке](streaming.md)) | деструктор удаляет его всегда |
+| `std::unique_ptr<ZSTD_DCtx, ...>` / `std::unique_ptr<ZSTD_CCtx, ...>` внутри `ZstdDecompressor` / `ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) | контексты zstd (объекты C‑библиотеки) | собственные deleter'ы вызывают `ZSTD_freeDCtx` / `ZSTD_freeCCtx` |
+| `std::ifstream` / `std::ofstream` | открытые файлы | закрываются сами |
 | `std::vector`, `std::string` повсюду | память | освобождают себя сами |
 
 В проекте **нет ручных `new`/`delete`** и блоков «очистки»: у каждого ресурса есть объект‑владелец.

@@ -6,6 +6,7 @@ add_executable(bardzip_tests
     container_tests.cpp
     poem_codec_tests.cpp
     integration_tests.cpp
+    streaming_tests.cpp
     temporary_file_tests.cpp
 
     ${PROJECT_SOURCE_DIR}/src/cli/arguments.cpp

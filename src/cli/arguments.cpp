@@ -12,7 +12,8 @@ namespace {
 
 constexpr std::string_view usage =
     "Usage:\n"
-    "  bardzip encode <input> -o <output> [--compression none|zstd|auto]\n"
+    "  bardzip encode <input> -o <output> [--compression none|zstd|auto]"
+    " [--max-input <bytes>]\n"
     "  bardzip decode <input> -o <output> [--max-output <bytes>]\n"
     "  bardzip verify <input> [--max-output <bytes>]\n"
     "  bardzip inspect <input>";
@@ -112,6 +113,11 @@ Arguments parse_arguments(int argc, char* argv[]) {
                  arguments.command == Command::Encode)
         {
             arguments.compression = parse_compression(value_of(i));
+        }
+        else if (argument == "--max-input" &&
+                 arguments.command == Command::Encode)
+        {
+            arguments.max_input = parse_size(value_of(i));
         }
         else if (argument == "--max-output" && reads_poem_limit) {
             arguments.max_output = parse_size(value_of(i));

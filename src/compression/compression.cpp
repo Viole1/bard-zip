@@ -11,7 +11,12 @@ namespace bardzip {
 namespace {
 
 constexpr int zstd_level = 3;
-constexpr std::size_t output_chunk_size = 64 * 1024;
+
+struct CompressionContextDeleter {
+    void operator()(ZSTD_CCtx* context) const noexcept {
+        ZSTD_freeCCtx(context);
+    }
+};
 
 struct DecompressionContextDeleter {
     void operator()(ZSTD_DCtx* context) const noexcept {
@@ -19,48 +24,114 @@ struct DecompressionContextDeleter {
     }
 };
 
-std::vector<std::uint8_t> compress_zstd(std::span<const std::uint8_t> original) {
-    std::vector<std::uint8_t> compressed(ZSTD_compressBound(original.size()));
-
-    const auto size = ZSTD_compress(
-        compressed.data(),
-        compressed.size(),
-        original.data(),
-        original.size(),
-        zstd_level
-    );
-
-    if (ZSTD_isError(size)) {
-        throw std::runtime_error(
-            std::string("zstd compression failed: ") + ZSTD_getErrorName(size)
-        );
-    }
-
-    compressed.resize(size);
-    return compressed;
 }
 
-std::vector<std::uint8_t> decompress_zstd(
-    std::span<const std::uint8_t> payload,
-    std::uint64_t expected_size
-) {
-    const std::unique_ptr<ZSTD_DCtx, DecompressionContextDeleter> context{
-        ZSTD_createDCtx()
-    };
+struct ZstdCompressor::Impl {
+    std::unique_ptr<ZSTD_CCtx, CompressionContextDeleter> context{ ZSTD_createCCtx() };
+    ByteSink sink;
+    std::vector<std::uint8_t> buffer = std::vector<std::uint8_t>(stream_block_size);
 
-    if (!context) {
+    void check(std::size_t result) const {
+        if (ZSTD_isError(result)) {
+            throw std::runtime_error(
+                std::string("zstd compression failed: ") + ZSTD_getErrorName(result)
+            );
+        }
+    }
+
+    void drive(ZSTD_EndDirective directive, ZSTD_inBuffer& input) {
+        while (true) {
+            ZSTD_outBuffer output{ buffer.data(), buffer.size(), 0 };
+
+            const auto remaining =
+                ZSTD_compressStream2(context.get(), &output, &input, directive);
+            check(remaining);
+
+            if (output.pos != 0) {
+                sink({ buffer.data(), output.pos });
+            }
+
+            const bool done = directive == ZSTD_e_end
+                ? remaining == 0
+                : input.pos == input.size;
+
+            if (done) {
+                return;
+            }
+        }
+    }
+};
+
+ZstdCompressor::ZstdCompressor(std::uint64_t source_size, ByteSink sink)
+    : impl_(std::make_unique<Impl>())
+{
+    if (!impl_->context) {
+        throw std::runtime_error("Failed to create zstd compression context");
+    }
+
+    impl_->sink = std::move(sink);
+
+    impl_->check(ZSTD_CCtx_setParameter(
+        impl_->context.get(), ZSTD_c_compressionLevel, zstd_level));
+    impl_->check(ZSTD_CCtx_setPledgedSrcSize(impl_->context.get(), source_size));
+}
+
+ZstdCompressor::~ZstdCompressor() = default;
+
+void ZstdCompressor::write(std::span<const std::uint8_t> bytes) {
+    if (bytes.empty()) {
+        return;
+    }
+
+    ZSTD_inBuffer input{ bytes.data(), bytes.size(), 0 };
+    impl_->drive(ZSTD_e_continue, input);
+}
+
+void ZstdCompressor::finish() {
+    ZSTD_inBuffer input{ nullptr, 0, 0 };
+    impl_->drive(ZSTD_e_end, input);
+}
+
+struct ZstdDecompressor::Impl {
+    std::unique_ptr<ZSTD_DCtx, DecompressionContextDeleter> context{ ZSTD_createDCtx() };
+    ByteSink sink;
+    std::vector<std::uint8_t> buffer = std::vector<std::uint8_t>(stream_block_size);
+    std::uint64_t expected_size = 0;
+    std::uint64_t produced = 0;
+    bool frame_done = false;
+};
+
+ZstdDecompressor::ZstdDecompressor(std::uint64_t expected_size, ByteSink sink)
+    : impl_(std::make_unique<Impl>())
+{
+    if (!impl_->context) {
         throw std::runtime_error("Failed to create zstd decompression context");
     }
 
-    ZSTD_inBuffer input{ payload.data(), payload.size(), 0 };
+    impl_->sink = std::move(sink);
+    impl_->expected_size = expected_size;
+}
 
-    std::vector<std::uint8_t> result;
-    std::vector<std::uint8_t> chunk(output_chunk_size);
+ZstdDecompressor::~ZstdDecompressor() = default;
+
+void ZstdDecompressor::write(std::span<const std::uint8_t> bytes) {
+    auto& state = *impl_;
+
+    if (bytes.empty()) {
+        return;
+    }
+
+    if (state.frame_done) {
+        throw std::invalid_argument("Unexpected data after zstd frame");
+    }
+
+    ZSTD_inBuffer input{ bytes.data(), bytes.size(), 0 };
 
     while (true) {
-        ZSTD_outBuffer output{ chunk.data(), chunk.size(), 0 };
+        ZSTD_outBuffer output{ state.buffer.data(), state.buffer.size(), 0 };
+        const auto input_before = input.pos;
 
-        const auto hint = ZSTD_decompressStream(context.get(), &output, &input);
+        const auto hint = ZSTD_decompressStream(state.context.get(), &output, &input);
 
         if (ZSTD_isError(hint)) {
             throw std::invalid_argument(
@@ -68,36 +139,82 @@ std::vector<std::uint8_t> decompress_zstd(
             );
         }
 
-        if (output.pos > expected_size - result.size()) {
+        if (output.pos > state.expected_size - state.produced) {
             throw std::invalid_argument(
                 "Decompressed data exceeds declared original size"
             );
         }
 
-        result.insert(
-            result.end(),
-            chunk.begin(),
-            chunk.begin() + static_cast<std::ptrdiff_t>(output.pos)
-        );
+        if (output.pos != 0) {
+            state.produced += output.pos;
+            state.sink({ state.buffer.data(), output.pos });
+        }
 
         if (hint == 0) {
-            break;
+            state.frame_done = true;
+
+            if (input.pos != input.size) {
+                throw std::invalid_argument("Unexpected data after zstd frame");
+            }
+
+            return;
         }
 
-        if (input.pos == input.size && output.pos < output.size) {
-            throw std::invalid_argument("Truncated zstd payload");
+        const bool input_consumed = input.pos == input.size;
+        const bool output_has_room = output.pos < output.size;
+
+        // The decoder may still hold buffered output after taking all input.
+        if (input_consumed && output_has_room) {
+            return;
+        }
+
+        if (output.pos == 0 && input.pos == input_before) {
+            throw std::invalid_argument("Corrupted zstd payload: no progress");
         }
     }
+}
 
-    if (input.pos != input.size) {
-        throw std::invalid_argument("Unexpected data after zstd frame");
+void ZstdDecompressor::finish() {
+    auto& state = *impl_;
+
+    if (!state.frame_done) {
+        throw std::invalid_argument("Truncated zstd payload");
     }
 
-    if (result.size() != expected_size) {
+    if (state.produced != state.expected_size) {
         throw std::invalid_argument(
             "Decompressed size does not match original size"
         );
     }
+}
+
+namespace {
+
+std::vector<std::uint8_t> compress_zstd(std::span<const std::uint8_t> original) {
+    std::vector<std::uint8_t> compressed;
+
+    ZstdCompressor compressor(original.size(), [&](std::span<const std::uint8_t> chunk) {
+        compressed.insert(compressed.end(), chunk.begin(), chunk.end());
+    });
+
+    compressor.write(original);
+    compressor.finish();
+
+    return compressed;
+}
+
+std::vector<std::uint8_t> decompress_zstd(
+    std::span<const std::uint8_t> payload,
+    std::uint64_t expected_size
+) {
+    std::vector<std::uint8_t> result;
+
+    ZstdDecompressor decompressor(expected_size, [&](std::span<const std::uint8_t> chunk) {
+        result.insert(result.end(), chunk.begin(), chunk.end());
+    });
+
+    decompressor.write(payload);
+    decompressor.finish();
 
     return result;
 }

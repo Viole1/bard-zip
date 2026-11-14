@@ -4,8 +4,8 @@
 
 namespace bardzip {
 
-std::uint32_t crc32(std::span<const std::uint8_t> bytes) {
-    std::uint32_t crc = 0xFFFFFFFFu;
+void Crc32::update(std::span<const std::uint8_t> bytes) noexcept {
+    auto crc = state_;
 
     for (const auto byte : bytes) {
         crc ^= byte;
@@ -20,7 +20,13 @@ std::uint32_t crc32(std::span<const std::uint8_t> bytes) {
         }
     }
 
-    return ~crc;
+    state_ = crc;
+}
+
+std::uint32_t crc32(std::span<const std::uint8_t> bytes) {
+    Crc32 crc;
+    crc.update(bytes);
+    return crc.value();
 }
 
 }

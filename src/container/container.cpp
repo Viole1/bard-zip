@@ -9,6 +9,20 @@
 
 namespace bardzip {
 
+void ensure_within_output_limit(
+    std::uint64_t declared_size,
+    std::uint64_t max_output
+) {
+    if (declared_size > max_output) {
+        throw std::runtime_error(
+            "Output limit exceeded: declared "
+            + std::to_string(declared_size)
+            + " bytes, allowed "
+            + std::to_string(max_output)
+        );
+    }
+}
+
 std::vector<std::uint8_t> build_container(
     std::span<const std::uint8_t> original,
     CompressionMode mode
@@ -49,14 +63,7 @@ std::vector<std::uint8_t> extract_container(
 
     const auto header = parse_header(container.first(header_size));
 
-    if (header.original_size > max_output) {
-        throw std::runtime_error(
-            "Output limit exceeded: declared "
-            + std::to_string(header.original_size)
-            + " bytes, allowed "
-            + std::to_string(max_output)
-        );
-    }
+    ensure_within_output_limit(header.original_size, max_output);
 
     if (header.payload_size != container.size() - header_size) {
         throw std::invalid_argument("Container size mismatch");

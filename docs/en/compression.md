@@ -1,6 +1,6 @@
 # Compression
 
-[Docs index](../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · 🇷🇺 [Русская версия](../ru/compression.md)
+[Docs index](../../README.md) · [Overview](overview.md) · [Main flow](main-flow.md) · [RAII](raii.md) · [CRC32](crc32.md) · [Streaming](streaming.md) · 🇷🇺 [Русская версия](../ru/compression.md)
 
 ## In plain words
 
@@ -35,7 +35,7 @@ flowchart TD
 
 ## Compress
 
-`ZSTD_compress` is called into a buffer sized by `ZSTD_compressBound` (the worst case the library guarantees); the buffer is then trimmed to the real size. Any library error becomes an exception.
+`ZstdCompressor` ([compression.cpp](../../src/compression/compression.cpp)) takes the data in blocks (`write`) and hands compressed bytes to a callback as they appear; `finish()` closes the frame. The exact source size is announced up front, so it is stored in the frame header. Any library error becomes an exception. See [Streaming](streaming.md).
 
 ## Decompress — safely
 

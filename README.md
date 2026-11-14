@@ -11,6 +11,8 @@ BardZip превращает байты в поэзию.
 | RAII (automatic cleanup) | [docs/en/raii.md](docs/en/raii.md) | [docs/ru/raii.md](docs/ru/raii.md) |
 | CRC32 (checksums) | [docs/en/crc32.md](docs/en/crc32.md) | [docs/ru/crc32.md](docs/ru/crc32.md) |
 | Compression (zstd, `auto` mode) | [docs/en/compression.md](docs/en/compression.md) | [docs/ru/compression.md](docs/ru/compression.md) |
+| Streaming (constant memory, 64 KiB blocks) | [docs/en/streaming.md](docs/en/streaming.md) | [docs/ru/streaming.md](docs/ru/streaming.md) |
+| Benchmarks (baseline to compare future optimizations) | [docs/en/benchmarks.md](docs/en/benchmarks.md) | [docs/ru/benchmarks.md](docs/ru/benchmarks.md) |
 
 Suggested reading order: overview → main flow → the rest in any order.
 

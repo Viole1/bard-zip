@@ -22,12 +22,17 @@ namespace {
     );
 }
 
-}  // namespace
+struct CreatedFile {
+    std::filesystem::path path;
+    HANDLE handle;
+};
 
-TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
-    : destination_path_(destination)
-{
-    if (destination_path_.empty() || destination_path_.filename().empty()) {
+// Exclusively creates a new file named base + tag + <random>.
+CreatedFile create_unique_file(
+    const std::filesystem::path& base,
+    const std::wstring& tag
+) {
+    if (base.empty() || base.filename().empty()) {
         throw std::invalid_argument(
             "Destination path must name a file"
         );
@@ -42,11 +47,11 @@ TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
             (static_cast<std::uint64_t>(random()) << 32) |
             static_cast<std::uint64_t>(random());
 
-        temporary_path_ = destination_path_;
-        temporary_path_ += L".tmp." + std::to_wstring(random_value);
+        auto candidate = base;
+        candidate += tag + std::to_wstring(random_value);
 
         const HANDLE handle = CreateFileW(
-            temporary_path_.c_str(),
+            candidate.c_str(),
             GENERIC_WRITE,
             0,
             nullptr,
@@ -56,8 +61,7 @@ TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
         );
 
         if (handle != INVALID_HANDLE_VALUE) {
-            handle_ = handle;
-            return;
+            return { std::move(candidate), handle };
         }
 
         const DWORD error = GetLastError();
@@ -70,6 +74,17 @@ TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
     throw std::runtime_error(
         "Failed to create temporary file after multiple attempts"
     );
+}
+
+}  // namespace
+
+TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
+    : destination_path_(destination)
+{
+    auto created = create_unique_file(destination_path_, L".tmp.");
+
+    temporary_path_ = std::move(created.path);
+    handle_ = created.handle;
 }
 
 TemporaryFile::~TemporaryFile() noexcept {
@@ -156,6 +171,23 @@ void TemporaryFile::commit() {
     }
 
     committed_ = true;
+}
+
+ScratchFile::ScratchFile(const std::filesystem::path& base) {
+    auto created = create_unique_file(base, L".work.");
+    path_ = std::move(created.path);
+
+    if (!CloseHandle(created.handle)) {
+        const DWORD error = GetLastError();
+        DeleteFileW(path_.c_str());
+        throw_last_error(error, "Failed to close scratch file");
+    }
+}
+
+ScratchFile::~ScratchFile() noexcept {
+    if (!path_.empty()) {
+        DeleteFileW(path_.c_str());
+    }
 }
 
 }
