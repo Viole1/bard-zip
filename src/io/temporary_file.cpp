@@ -1,5 +1,7 @@
 #include "io/temporary_file.hpp"
 
+#include "core/errors.hpp"
+
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -33,7 +35,7 @@ CreatedFile create_unique_file(
     const std::wstring& tag
 ) {
     if (base.empty() || base.filename().empty()) {
-        throw std::invalid_argument(
+        throw UsageError(
             "Destination path must name a file"
         );
     }
@@ -78,8 +80,11 @@ CreatedFile create_unique_file(
 
 }  // namespace
 
-TemporaryFile::TemporaryFile(const std::filesystem::path& destination)
-    : destination_path_(destination)
+TemporaryFile::TemporaryFile(
+    const std::filesystem::path& destination,
+    bool replace_existing
+)
+    : destination_path_(destination), replace_existing_(replace_existing)
 {
     auto created = create_unique_file(destination_path_, L".tmp.");
 
@@ -159,7 +164,9 @@ void TemporaryFile::commit() {
     if (!MoveFileExW(
         temporary_path_.c_str(),
         destination_path_.c_str(),
-        MOVEFILE_WRITE_THROUGH
+        replace_existing_
+            ? (MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING)
+            : MOVEFILE_WRITE_THROUGH
     )) {
         const DWORD error = GetLastError();
 

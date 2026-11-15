@@ -32,6 +32,11 @@ try {
         throw "Executable reports '$reported' but CMakeLists.txt says $version. Rebuild first."
     }
 
+    $info = (Get-Item $exePath).VersionInfo
+    if ($info.FileVersion -ne $version -or $info.ProductName -ne "BardZip" -or $info.OriginalFilename -ne "bardzip.exe") {
+        throw "The version resource of the executable is missing or does not match $version. Rebuild first."
+    }
+
     $name = "bardzip-v$version-windows-x64"
     New-Item -ItemType Directory -Force $OutDir | Out-Null
     $outPath = (Resolve-Path $OutDir).Path

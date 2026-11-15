@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(BardZip
-    VERSION 0.1.1
+    VERSION 0.2.0
     LANGUAGES CXX
 )
 
@@ -58,10 +58,17 @@ add_library(bardzip_core STATIC
     src/container/crc32.cpp
     src/container/endian.cpp
     src/container/header.cpp
+    src/cli/arguments.cpp
+    src/cli/commands.cpp
+    src/cli/console_progress.cpp
+    src/cli/exit_codes.cpp
     src/core/file_operations.cpp
+    src/core/size_format.cpp
+    src/detect/file_type.cpp
     src/io/file_reader.cpp
     src/io/file_writer.cpp
     src/io/prefetch_stream.cpp
+    src/io/stdio.cpp
     src/io/temporary_file.cpp
 )
 
@@ -81,8 +88,29 @@ target_compile_options(bardzip_core PUBLIC
 
 add_executable(bardzip
     src/main.cpp
-    src/cli/arguments.cpp
 )
+
+if(WIN32)
+    # Application resources: icon, version information (shown in the file
+    # properties) and the manifest (UTF-8 command line, long paths, no elevation).
+    enable_language(RC)
+
+    set(BARDZIP_ICON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/bardzip.ico")
+    configure_file(
+        resources/bardzip.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/bardzip.rc
+        @ONLY
+    )
+
+    target_sources(bardzip PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/bardzip.rc
+        resources/bardzip.manifest
+    )
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/bardzip.rc
+        PROPERTIES OBJECT_DEPENDS ${BARDZIP_ICON_PATH}
+    )
+endif()
 
 target_link_libraries(bardzip PRIVATE bardzip_core)
 

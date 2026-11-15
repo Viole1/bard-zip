@@ -5,6 +5,7 @@
 #include <string>
 
 #include "container/crc32.hpp"
+#include "core/errors.hpp"
 #include "container/header.hpp"
 
 namespace bardzip {
@@ -14,7 +15,7 @@ void ensure_within_output_limit(
     std::uint64_t max_output
 ) {
     if (declared_size > max_output) {
-        throw std::runtime_error(
+        throw LimitError(
             "Output limit exceeded: declared "
             + std::to_string(declared_size)
             + " bytes, allowed "

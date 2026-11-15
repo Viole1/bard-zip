@@ -13,7 +13,8 @@ BardZip превращает байты в поэзию.
 | RAII (automatic cleanup) | [docs/en/raii.md](en/raii.md) | [docs/ru/raii.md](ru/raii.md) |
 | CRC32 (checksums) | [docs/en/crc32.md](en/crc32.md) | [docs/ru/crc32.md](ru/crc32.md) |
 | Compression (zstd, `auto` mode) | [docs/en/compression.md](en/compression.md) | [docs/ru/compression.md](ru/compression.md) |
-| Streaming (constant memory, 64 KiB blocks) | [docs/en/streaming.md](en/streaming.md) | [docs/ru/streaming.md](ru/streaming.md) |
+| Using bardzip in a terminal (progress, `--quiet`/`--verbose`, exit codes, pipes, completion) | [docs/en/cli.md](en/cli.md) | [docs/ru/cli.md](ru/cli.md) | (icon, metadata, manifest, signing) | [docs/en/windows.md](en/windows.md) | [docs/ru/windows.md](ru/windows.md) |
+| Helper commands (`preview`, `estimate`, `identify`, `--force`) | [docs/en/commands.md](en/commands.md) | [docs/ru/commands.md](ru/commands.md) | [docs/en/streaming.md](en/streaming.md) | [docs/ru/streaming.md](ru/streaming.md) |
 | Benchmarks (baseline to compare future optimizations) | [docs/en/benchmarks.md](en/benchmarks.md) | [docs/ru/benchmarks.md](ru/benchmarks.md) |
 | Fuzzing (robustness against broken and hostile files) | [docs/en/fuzzing.md](en/fuzzing.md) | [docs/ru/fuzzing.md](ru/fuzzing.md) |
 

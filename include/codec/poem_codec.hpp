@@ -56,6 +56,41 @@ private:
 
 std::string encode_poem(std::span<const std::uint8_t> container);
 
+// Size of the marker block at the start of every poem ("BARDZIP-POEM 1 DICT 1" and a blank line).
+inline constexpr std::size_t poem_marker_text_size = poem_marker.size() + 2;
+
+// Computes the exact size of the poem text without building it. Used like
+// PoemEncoder (write the container bytes, then finish) but the result does not
+// include the marker block; add poem_marker_text_size.
+class PoemMeter {
+public:
+    void write(std::span<const std::uint8_t> bytes) noexcept;
+    void finish() noexcept;
+
+    std::uint64_t text_size() const noexcept { return text_size_; }
+    std::uint64_t stanza_count() const noexcept { return stanza_count_; }
+
+private:
+    void add_stanza(std::uint8_t first, std::uint8_t second) noexcept;
+
+    std::uint64_t text_size_ = 0;
+    std::uint64_t stanza_count_ = 0;
+    bool has_pending_ = false;
+    std::uint8_t pending_ = 0;
+};
+
+// Bounds for the poem size of a container of the given size, without looking at
+// the data: every stanza has a shortest and a longest possible text. "typical"
+// is the average for random data. All sizes include the marker block.
+struct PoemSizeBounds {
+    std::uint64_t stanzas = 0;
+    std::uint64_t smallest = 0;
+    std::uint64_t typical = 0;
+    std::uint64_t largest = 0;
+};
+
+PoemSizeBounds poem_size_bounds(std::uint64_t container_size);
+
 using HeaderCallback = std::function<void(const Header&)>;
 
 // Reads a poem from the stream without loading it entirely into memory.

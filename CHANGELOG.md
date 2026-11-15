@@ -2,6 +2,32 @@
 
 All notable changes to BardZip are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while the version is 0.x, minor releases may still change behaviour).
 
+## [0.2.0]
+
+### Added
+
+- `bardzip preview <input> [--stanzas <n>]`: shows the first stanzas of the poem `encode` would write, and its exact size, without creating the file.
+- `bardzip estimate <input> [--quick]`: the exact poem size (reads the file once) or an instant approximate range, plus the input-limit status and a free-disk-space check.
+- `bardzip identify <poem>`: guesses the type of the hidden file (PNG, JPEG, ZIP, PDF, ...) from its first bytes.
+- `--force` for `encode` and `decode`: replaces an existing output file, but only after the new one is complete. The output can never be the input file itself (checked for every spelling of the path).
+- A progress line (`Writing poem  42%  1.2 GiB written  ~40 s left`) for `encode`, `decode`, `verify`, `preview` and `estimate`, shown on stderr only when it is a console, erased when a stage ends.
+- `-q`/`--quiet` and `-v`/`--verbose` for every command; `--quiet` leaves only errors and results, `--verbose` adds timings and settings.
+- Exit codes: 0 success, 1 internal error, 2 wrong usage, 3 file or system problem, 4 bad data, 5 limit exceeded (listed in `--help`).
+- `-` for standard input/output: `bardzip encode - -o -`, `decode - -o -`, `verify -`, `inspect -`, `identify -`, `preview -`, `estimate -`. Standard input is first copied to a temporary file; `decode` refuses to write binary data to a terminal.
+- `bardzip completion powershell` prints a PowerShell tab-completion script (commands, options and the values of `--compression`).
+- Application icon, version information (shown in the file properties) and a manifest are embedded into `bardzip.exe`; see `docs/en/windows.md`.
+- New documentation: `docs/en/cli.md`, `docs/en/commands.md` and `docs/en/windows.md` (with Russian translations).
+- CI and packaging checks: the embedded version resource must match `--version`, non-ASCII file names and pipe round trips must work, and exit codes and completion are verified.
+
+### Fixed
+
+- File names with non-ASCII characters (for example Cyrillic) are now accepted on the command line: the new manifest switches the program to the UTF-8 code page (Windows 10 1903 or later). Before, such names failed with "Failed to open input file".
+
+### Changed
+
+- The manifest also enables long paths (where the system allows it) and declares that the program never asks for elevation.
+- `src/cli` (argument parsing and command handlers) moved into the core library, so the commands are covered by the new CLI and command tests.
+
 ## [0.1.1]
 
 ### Added

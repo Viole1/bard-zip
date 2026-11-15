@@ -8,7 +8,12 @@ namespace bardzip {
 
 class TemporaryFile {
 public:
-    explicit TemporaryFile(const std::filesystem::path& destination);
+    // With replace_existing, commit() atomically replaces an existing destination;
+    // otherwise commit() fails if the destination exists.
+    explicit TemporaryFile(
+        const std::filesystem::path& destination,
+        bool replace_existing = false
+    );
 
     ~TemporaryFile() noexcept;
 
@@ -25,6 +30,7 @@ private:
 
     void* handle_ = nullptr;
     bool committed_ = false;
+    bool replace_existing_ = false;
 };
 
 // A uniquely named scratch file next to `base` (base + ".work.<random>").

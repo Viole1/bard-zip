@@ -26,3 +26,34 @@ jobs:
           ./build/Release/bardzip.exe --version
           ./build/Release/bardzip.exe decode examples/hello.poem -o hello.txt
           if (-not (Get-Content hello.txt -Raw).StartsWith("Hello, BardZip!")) { throw "unexpected example content" }
+
+      - name: Embedded metadata and Unicode file names
+        shell: pwsh
+        run: |
+          $exe = Get-Item ./build/Release/bardzip.exe
+          $info = $exe.VersionInfo
+          if ($info.ProductName -ne "BardZip" -or $info.OriginalFilename -ne "bardzip.exe") { throw "version resource is missing" }
+          if ($info.FileVersion -ne (& $exe.FullName --version).Trim().Split(" ")[1]) { throw "FileVersion differs from --version" }
+          # The UTF-8 manifest makes non-ASCII file names work on the command line.
+          [IO.File]::WriteAllBytes("фото.bin", [byte[]](1..200))
+          & $exe.FullName encode "фото.bin" -o "стих.poem"
+          & $exe.FullName decode "стих.poem" -o "фото-назад.bin"
+          if ((Get-FileHash "фото.bin").Hash -ne (Get-FileHash "фото-назад.bin").Hash) { throw "round trip with Unicode names failed" }
+
+      - name: Pipes, exit codes and completion
+        shell: pwsh
+        run: |
+          $exe = (Get-Item ./build/Release/bardzip.exe).FullName
+          [IO.File]::WriteAllBytes("pipe.bin", [byte[]](0..255))
+          # cmd keeps the pipe binary-safe on every PowerShell version.
+          cmd /c "`"$exe`" encode - -o - < pipe.bin | `"$exe`" decode - -o pipe.out"
+          if ($LASTEXITCODE -ne 0) { throw "pipe round trip failed" }
+          if ((Get-FileHash pipe.bin).Hash -ne (Get-FileHash pipe.out).Hash) { throw "pipe round trip differs" }
+          & $exe verify missing.poem 2>$null
+          if ($LASTEXITCODE -ne 3) { throw "missing file must exit with 3, got $LASTEXITCODE" }
+          Set-Content junk.poem "not a poem"
+          & $exe verify junk.poem 2>$null
+          if ($LASTEXITCODE -ne 4) { throw "invalid poem must exit with 4, got $LASTEXITCODE" }
+          & $exe nonsense 2>$null
+          if ($LASTEXITCODE -ne 2) { throw "bad usage must exit with 2, got $LASTEXITCODE" }
+          & $exe completion powershell | Out-String | Invoke-Expression

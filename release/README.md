@@ -20,7 +20,9 @@ bardzip verify my-archive.poem
 bardzip decode my-archive.poem -o restored.zip
 ```
 
-Run `bardzip --help` for all commands and options.
+Handy before you start: `bardzip estimate my-archive.zip` tells how big the poem will be and whether it fits on your disk, `bardzip preview my-archive.zip` shows how it will start, and `bardzip identify my-archive.poem` guesses what is hidden in a poem (PNG, JPEG, ZIP...).
+
+Run `bardzip --help` for all commands and options, including the exit codes. Tab completion for PowerShell: `bardzip completion powershell | Out-String | Invoke-Expression` (add that line to your profile to keep it). `-` stands for standard input/output, so poems work in pipelines.
 
 ## Verify the download
 

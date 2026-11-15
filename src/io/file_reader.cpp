@@ -8,7 +8,7 @@ std::ifstream open_input_file(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
 
     if (!input) {
-        throw std::runtime_error("Failed to open input file");
+        throw std::runtime_error("Cannot open input file: " + path.string());
     }
 
     return input;

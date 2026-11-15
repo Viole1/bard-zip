@@ -267,6 +267,73 @@ std::string encode_poem(std::span<const std::uint8_t> container) {
 
 namespace {
 
+constexpr std::uint64_t stanza_fixed_size = stanza_refrain.size() + 2;
+
+}
+
+void PoemMeter::write(std::span<const std::uint8_t> bytes) noexcept {
+    for (const auto byte : bytes) {
+        if (has_pending_) {
+            add_stanza(pending_, byte);
+            has_pending_ = false;
+        }
+        else {
+            pending_ = byte;
+            has_pending_ = true;
+        }
+    }
+}
+
+void PoemMeter::finish() noexcept {
+    if (has_pending_) {
+        add_stanza(pending_, 0);
+        has_pending_ = false;
+    }
+}
+
+void PoemMeter::add_stanza(std::uint8_t first, std::uint8_t second) noexcept {
+    const auto& tables = encoding_tables();
+
+    text_size_ += tables.first_lines[first].size()
+        + tables.second_lines[second].size()
+        + stanza_fixed_size;
+    ++stanza_count_;
+}
+
+PoemSizeBounds poem_size_bounds(std::uint64_t container_size) {
+    const auto& tables = encoding_tables();
+
+    std::uint64_t first_min = ~0ull, first_max = 0, first_sum = 0;
+    std::uint64_t second_min = ~0ull, second_max = 0, second_sum = 0;
+
+    for (std::size_t value = 0; value < 256; ++value) {
+        const auto first = tables.first_lines[value].size();
+        const auto second = tables.second_lines[value].size();
+
+        first_min = (std::min<std::uint64_t>)(first_min, first);
+        first_max = (std::max<std::uint64_t>)(first_max, first);
+        first_sum += first;
+        second_min = (std::min<std::uint64_t>)(second_min, second);
+        second_max = (std::max<std::uint64_t>)(second_max, second);
+        second_sum += second;
+    }
+
+    PoemSizeBounds bounds;
+    bounds.stanzas = container_size / 2 + container_size % 2;
+
+    const auto total = [&](std::uint64_t per_stanza) {
+        return poem_marker_text_size + bounds.stanzas * per_stanza;
+    };
+
+    bounds.smallest = total(first_min + second_min + stanza_fixed_size);
+    bounds.largest = total(first_max + second_max + stanza_fixed_size);
+    bounds.typical = total((first_sum + second_sum) / 256 + stanza_fixed_size);
+
+    return bounds;
+}
+
+namespace {
+
 // Reads non-empty lines from a stream in blocks, so memory use does not depend
 // on the poem size and a single line can never grow without bound.
 class LineReader {

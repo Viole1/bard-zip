@@ -139,10 +139,14 @@ Design principle: **each layer knows only the layer below it**, and pure logic (
 ## 5. Using the tool
 
 ```text
-bardzip encode <input> -o <output> [--compression none|zstd|auto] [--max-input <bytes>]
-bardzip decode <input> -o <output> [--max-output <bytes>]
+bardzip encode <input> -o <output> [--compression none|zstd|auto] [--max-input <bytes>] [--force]
+bardzip decode <input> -o <output> [--max-output <bytes>] [--force]
 bardzip verify <input> [--max-output <bytes>]
 bardzip inspect <input>
+bardzip preview <input> [--stanzas <n>] [--compression none|zstd|auto]
+bardzip estimate <input> [--compression none|zstd|auto] [--quick] [--max-input <bytes>] [-o <output>]
+bardzip identify <poem>
+bardzip completion powershell
 bardzip --help | --version
 ```
 
@@ -152,6 +156,12 @@ bardzip --help | --version
 | `decode` | poem → file. |
 | `verify` | Fully decodes in memory and checks all checksums; prints `Verification successful.` Writes nothing. |
 | `inspect` | Prints the header: version, compression, sizes, CRC32 values. Does **not** check the payload (it says so). |
+| `preview` | Shows the first stanzas of the poem `encode` would write, and its exact size. Writes nothing. |
+| `estimate` | Tells how big the poem would be and whether it fits on the disk (exact, or `--quick` for a range). Writes nothing. |
+| `identify` | Guesses the type of the file hidden in a poem (PNG, JPEG, ZIP...) from its first bytes. |
+| `completion` | Prints a tab-completion script for PowerShell. |
+
+These helper commands and `--force` are described in [Helper commands](commands.md). Every command also accepts `-q`/`--quiet` and `-v`/`--verbose`; `-` stands for standard input/output; the program shows a progress line on a console and returns documented exit codes - see [Command line](cli.md).
 
 ```text
 bardzip encode photo.jpg -o photo.poem
@@ -164,7 +174,7 @@ Exit code: `0` on success, `1` on any error (message goes to stderr as `Error: .
 
 ### Safety rules
 
-- **Never overwrites.** If the output file already exists, the command fails.
+- **Never overwrites by default.** If the output file already exists, the command fails; `--force` replaces it, but only once the new result is complete, and the output can never be the input file itself.
 - **Atomic writes.** The result appears only when completely written ([RAII](raii.md)).
 - **Size limits.** Memory use does not depend on the file size (see [Streaming](streaming.md)), but a poem is ~54× larger than its data, so `encode` refuses inputs above **16 MiB** by default (a poem of about 0.8 GB). The error shows the estimated poem size; raise the limit with `--max-input <bytes>` (`--max-input 0` = no limit). Decoded output is limited to `--max-output` (default 256 MiB) and is checked *before* decompression, which protects against "decompression bombs" (a tiny file that expands to gigabytes). A single poem line may not exceed 4096 bytes.
 - **Strict decoding.** Any wrong word, missing period, wrong refrain, incomplete stanza, wrong padding, bad checksum or mismatched size is an error. Windows line endings (CRLF), extra blank lines and a UTF-8 byte order mark at the start of the file (added by some editors when a poem is re-saved) are tolerated.
